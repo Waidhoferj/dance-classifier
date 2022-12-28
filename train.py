@@ -13,10 +13,30 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 from preprocessing.dataset import SongDataset
 from preprocessing.preprocess import get_examples
-from dancer_net.dancer_net import ShortChunkCNN
+from models.residual import ResidualDancer
 
 DEVICE = "mps"
 SEED = 42
+TARGET_CLASSES = ['ATN',
+        'BBA',
+        'BCH',
+        'BLU',
+        'CHA',
+        'CMB',
+        'CSG',
+        'ECS',
+        'HST',
+        'JIV',
+        'LHP',
+        'QST',
+        'RMB',
+        'SFT',
+        'SLS',
+        'SMB',
+        'SWZ',
+        'TGO',
+        'VWZ',
+        'WCS']
 
 def get_timestamp() -> str:
     return datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
@@ -115,28 +135,8 @@ def train(
         
 
 def cross_validation(seed=42, batch_size=64, k=5, device="mps"):
-    target_classes = ['ATN',
-    'BBA',
-    'BCH',
-    'BLU',
-    'CHA',
-    'CMB',
-    'CSG',
-    'ECS',
-    'HST',
-    'JIV',
-    'LHP',
-    'QST',
-    'RMB',
-    'SFT',
-    'SLS',
-    'SMB',
-    'SWZ',
-    'TGO',
-    'VWZ',
-    'WCS']
     df = pd.read_csv("data/songs.csv")
-    x,y = get_examples(df, "data/samples",class_list=target_classes)
+    x,y = get_examples(df, "data/samples",class_list=TARGET_CLASSES)
     
     dataset = SongDataset(x,y)
     splits=KFold(n_splits=k,shuffle=True,random_state=seed)
@@ -149,7 +149,7 @@ def cross_validation(seed=42, batch_size=64, k=5, device="mps"):
         train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
         test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
         n_classes = len(y[0])
-        model = ShortChunkCNN(n_class=n_classes).to(device)
+        model = ResidualDancer(n_classes=n_classes).to(device)
         model, _ = train(model,train_loader, epochs=2, device=device)
         val_metrics = evaluate(model, test_loader, nn.BCELoss())
         metrics.append(val_metrics)
@@ -164,28 +164,9 @@ def cross_validation(seed=42, batch_size=64, k=5, device="mps"):
 
 
 def train_model():
-    target_classes = ['ATN',
-        'BBA',
-        'BCH',
-        'BLU',
-        'CHA',
-        'CMB',
-        'CSG',
-        'ECS',
-        'HST',
-        'JIV',
-        'LHP',
-        'QST',
-        'RMB',
-        'SFT',
-        'SLS',
-        'SMB',
-        'SWZ',
-        'TGO',
-        'VWZ',
-        'WCS']
+
     df = pd.read_csv("data/songs.csv")
-    x,y = get_examples(df, "data/samples",class_list=target_classes)
+    x,y = get_examples(df, "data/samples",class_list=TARGET_CLASSES)
     dataset = SongDataset(x,y)
     train_count = int(len(dataset) * 0.9)
     datasets = random_split(dataset, [train_count, len(dataset) - train_count], torch.Generator().manual_seed(SEED))
@@ -193,7 +174,7 @@ def train_model():
     train_data, val_data = data_loaders
     example_spec, example_label = dataset[0]
     n_classes = len(example_label)
-    model = ShortChunkCNN(n_class=n_classes).to(DEVICE)
+    model = ResidualDancer(n_classes=n_classes).to(DEVICE)
     model, metrics = train(model,train_data, val_data, epochs=3, device=DEVICE)
     
     log_dir = os.path.join(
@@ -201,11 +182,11 @@ def train_model():
     )
     os.makedirs(log_dir, exist_ok=True)
     
-    torch.save(model.state_dict(), os.path.join(log_dir, "dancer_net.pt"))
+    torch.save(model.state_dict(), os.path.join(log_dir, "residual_dancer.pt"))
     metrics = pd.DataFrame(metrics)
     metrics.to_csv(os.path.join(log_dir, "metrics.csv"))
     config = {
-        "classes": target_classes
+        "classes": TARGET_CLASSES
     }
     with open(os.path.join(log_dir, "config.json")) as f:
         json.dump(config, f)

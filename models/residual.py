@@ -1,16 +1,12 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchaudio import transforms as taT, functional as taF
 
+# Architecture based on: https://github.com/minzwon/sota-music-tagging-models/blob/36aa13b7205ff156cf4dcab60fd69957da453151/training/model.py
 
-
-DEVICE = "mps"
-class ShortChunkCNN(nn.Module):
+class ResidualDancer(nn.Module):
     def __init__(self,
                 n_channels=128,
-                sample_rate=16000,
-                n_class=50):
+                n_classes=50):
         super().__init__()
 
         # Spectrogram
@@ -18,19 +14,19 @@ class ShortChunkCNN(nn.Module):
 
         # CNN
         self.res_layers = nn.Sequential(
-            Res_2d(1, n_channels, stride=2),
-            Res_2d(n_channels, n_channels, stride=2),
-            Res_2d(n_channels, n_channels*2, stride=2),
-            Res_2d(n_channels*2, n_channels*2, stride=2),
-            Res_2d(n_channels*2, n_channels*2, stride=2),
-            Res_2d(n_channels*2, n_channels*2, stride=2),
-            Res_2d(n_channels*2, n_channels*4, stride=2)
+            ResBlock(1, n_channels, stride=2),
+            ResBlock(n_channels, n_channels, stride=2),
+            ResBlock(n_channels, n_channels*2, stride=2),
+            ResBlock(n_channels*2, n_channels*2, stride=2),
+            ResBlock(n_channels*2, n_channels*2, stride=2),
+            ResBlock(n_channels*2, n_channels*2, stride=2),
+            ResBlock(n_channels*2, n_channels*4, stride=2)
         )
 
         # Dense
         self.dense1 = nn.Linear(n_channels*4, n_channels*4)
         self.bn = nn.BatchNorm1d(n_channels*4)
-        self.dense2 = nn.Linear(n_channels*4, n_class)
+        self.dense2 = nn.Linear(n_channels*4, n_classes)
         self.dropout = nn.Dropout(0.3)
 
     def forward(self, x):
@@ -56,7 +52,7 @@ class ShortChunkCNN(nn.Module):
         return x
 
 
-class Res_2d(nn.Module):
+class ResBlock(nn.Module):
     def __init__(self, input_channels, output_channels, shape=3, stride=2):
         super().__init__()
         # convolution

@@ -4,15 +4,17 @@ import numpy as np
 import torch
 from preprocessing.preprocess import AudioPipeline
 from preprocessing.preprocess import AudioPipeline
-from dancer_net.dancer_net import ShortChunkCNN
+from models.residual import ResidualDancer
 import os
 import json
 from functools import cache
 import pandas as pd
 
+
+
 @cache
-def get_model(device) -> tuple[ShortChunkCNN, np.ndarray]:
-    model_path = "logs/20221226-230930"
+def get_model(device) -> tuple[ResidualDancer, np.ndarray]:
+    model_path = "models/weights/ResidualDancer"
     weights = os.path.join(model_path, "dancer_net.pt")
     config_path = os.path.join(model_path, "config.json")
 
@@ -20,7 +22,7 @@ def get_model(device) -> tuple[ShortChunkCNN, np.ndarray]:
         config = json.load(f)
     labels = np.array(sorted(config["classes"]))
 
-    model = ShortChunkCNN(n_class=len(labels))
+    model = ResidualDancer(n_classes=len(labels))
     model.load_state_dict(torch.load(weights))
     model = model.to(device).eval()
     return model, labels

@@ -1,5 +1,8 @@
 __pycache__
 .DS_Store
-data
+data/samples
+data/samples-backup.zip
+data/samples-backup.zip
+data/songs.csv
 logs
 gradio_cached_examples
