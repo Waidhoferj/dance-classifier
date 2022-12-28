@@ -1,10 +1,11 @@
 torchvision
-pytorch
+torch
+torchaudio
 numpy
 pandas
 seaborn
 matplotlib
-torchaudio
+scikit-learn
 bs4
 requests
 tqdm
