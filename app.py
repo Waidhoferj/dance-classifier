@@ -10,7 +10,7 @@ import json
 from functools import cache
 import pandas as pd
 
-
+DEVICE = "cpu"
 
 @cache
 def get_model(device) -> tuple[ResidualDancer, np.ndarray]:
@@ -43,10 +43,10 @@ def predict(audio: tuple[int, np.ndarray]) -> list[str]:
     expected_duration = 6
     threshold = 0.5
     sample_len = sample_rate * expected_duration
-    device = "mps"
+    
 
     audio_pipeline = get_pipeline(sample_rate)
-    model, labels = get_model(device)
+    model, labels = get_model(DEVICE)
 
     if sample_len > len(waveform):
         raise gr.Error("You must record for at least 6 seconds")
@@ -60,7 +60,7 @@ def predict(audio: tuple[int, np.ndarray]) -> list[str]:
     waveform = waveform.astype("float32")
     waveform = torch.from_numpy(waveform)
     spectrogram = audio_pipeline(waveform)
-    spectrogram = spectrogram.unsqueeze(0).to(device)
+    spectrogram = spectrogram.unsqueeze(0).to(DEVICE)
 
     with torch.no_grad():
         results = model(spectrogram)
