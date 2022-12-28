@@ -1,0 +1,20 @@
+name: dancer-net
+channels:
+  - anaconda
+  - conda-forge
+dependencies:
+  - torchvision
+  - pytorch
+  - numpy
+  - pandas
+  - seaborn
+  - python=3.10
+  - matplotlib
+  - torchaudio
+  - bs4
+  - requests
+  - bidict
+  - tqdm
+  - pip
+    - gradio
+prefix: /opt/homebrew/Caskroom/miniforge/base/envs/dancer-net
