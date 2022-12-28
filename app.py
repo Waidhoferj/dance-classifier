@@ -3,7 +3,6 @@ import gradio as gr
 import numpy as np
 import torch
 from preprocessing.preprocess import AudioPipeline
-from preprocessing.preprocess import AudioPipeline
 from models.residual import ResidualDancer
 import os
 import json
@@ -23,7 +22,7 @@ def get_model(device) -> tuple[ResidualDancer, np.ndarray]:
     labels = np.array(sorted(config["classes"]))
 
     model = ResidualDancer(n_classes=len(labels))
-    model.load_state_dict(torch.load(weights))
+    model.load_state_dict(torch.load(weights, map_location=DEVICE))
     model = model.to(device).eval()
     return model, labels
 
