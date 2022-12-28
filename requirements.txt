@@ -1,0 +1,12 @@
+torchvision
+pytorch
+numpy
+pandas
+seaborn
+matplotlib
+torchaudio
+bs4
+requests
+tqdm
+pip
+gradio
