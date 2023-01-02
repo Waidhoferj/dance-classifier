@@ -75,12 +75,6 @@ def get_songs(soup: bs) -> dict:
     return songs
 
 
-def download_song(url: str, out_dir: str):
-    response = requests.get(url)
-    filename = url.split("/")[-1]
-    out_file = Path(out_dir, f"{filename}.mp3")
-    with open(out_file, "wb") as f:
-        f.write(response.content)
 
 def scrape_dance_info() -> pd.DataFrame:
     js_obj = re.compile(r"{(.|\n)*}")

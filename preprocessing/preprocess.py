@@ -82,23 +82,3 @@ def get_examples(df:pd.DataFrame, audio_dir:str, class_list=None) -> tuple[list[
 
     return audio_paths, list(labels)
 
-class AudioPipeline(torch.nn.Module):
-    def __init__(
-        self,
-        input_freq=16000,
-        resample_freq=16000,
-    ):
-        super().__init__()
-        self.resample = taT.Resample(orig_freq=input_freq, new_freq=resample_freq)
-        self.spec = taT.MelSpectrogram(sample_rate=resample_freq, n_mels=64, n_fft=1024)
-        self.to_db = taT.AmplitudeToDB()
-
-    def forward(self, waveform: torch.Tensor) -> torch.Tensor:
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(0, keepdim=True)
-        waveform = self.resample(waveform)
-        spectrogram = self.spec(waveform)
-        spectrogram = self.to_db(spectrogram)
-
-        return spectrogram
-

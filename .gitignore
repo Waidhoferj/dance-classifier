@@ -1,8 +1,15 @@
 __pycache__
 .DS_Store
 data/samples
-data/samples-backup.zip
+data/spotify-samples
 data/samples-backup.zip
 data/songs.csv
+data/songs_original.csv
 logs
 gradio_cached_examples
+explore.ipynb
+scrapers/auth
+lightning_logs
+data/backup_1.csv
+data/backup.csv
+data/*.zip

@@ -1,0 +1,23 @@
+device: mps
+seed: 42
+dance_ids:
+  - ATN
+  - BBA
+  - BCH
+  - BLU
+  - CHA
+  - CMB
+  - CSG
+  - ECS
+  - HST
+  - JIV
+  - LHP
+  - QST
+  - RMB
+  - SFT
+  - SLS
+  - SMB
+  - SWZ
+  - TGO
+  - VWZ
+  - WCS
