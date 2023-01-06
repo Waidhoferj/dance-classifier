@@ -1,6 +1,7 @@
-torchvision
 torch
+torchvision
 torchaudio
+pytorch-lightning
 numpy
 pandas
 seaborn

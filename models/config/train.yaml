@@ -1,23 +1,46 @@
-device: mps
-seed: 42
-dance_ids:
-  - ATN
-  - BBA
-  - BCH
-  - BLU
-  - CHA
-  - CMB
-  - CSG
-  - ECS
-  - HST
-  - JIV
-  - LHP
-  - QST
-  - RMB
-  - SFT
-  - SLS
-  - SMB
-  - SWZ
-  - TGO
-  - VWZ
-  - WCS
+global:
+  device: mps
+  seed: 42
+  dance_ids:
+    - ATN
+    - BCH
+    - CHA
+    - ECS
+    - HST
+    - JIV
+    - QST
+    - RMB
+    - SFT
+    - SLS
+    - SMB
+    - SWZ
+    - TGO
+    - VWZ
+    - WCS
+data_module:
+  batch_size: 1024
+  num_workers: 10
+  min_votes: 2
+  song_data_path: data/songs_cleaned.csv
+  song_audio_path: data/samples
+  dataset_kwargs:
+    audio_window_duration: 6
+    audio_window_jitter: 1.5
+    audio_pipeline_kwargs:
+      mask_count: 0 # Don't mask the data
+      snr_mean: 15.0 # Pretty much eliminate the noise
+      freq_mask_size: 10
+      time_mask_size: 80
+
+trainer:
+  log_every_n_steps: 15
+  accelerator: gpu
+  max_epochs: 50
+  min_epochs: 5
+  fast_dev_run: False
+  track_grad_norm: 2
+  # gradient_clip_val: 0.5
+training_environment:
+  learning_rate: 0.0033
+model:
+  n_channels: 128

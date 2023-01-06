@@ -1,20 +1,15 @@
-weight_path: lightning_logs/version_0/checkpoints/epoch=5-step=870.ckpt
+weight_path: models/weights/ResidualDancer/weights.ckpt
 expected_duration: 6
-threshold: 0.5
+threshold: 0.4
 resample_frequency: 16000
 device: cpu
 labels:
   - Argentine Tango
-  - Balboa
   - Bachata
-  - Blues
   - Cha Cha
-  - Cumbia
-  - Carolina Shag
   - East Coast Swing
   - Hustle
   - Jive
-  - Lindy Hop
   - Quickstep
   - Rumba
   - Slow Foxtrot
@@ -23,4 +18,3 @@ labels:
   - Slow Waltz
   - Tango (Ballroom)
   - Viennese Waltz
-  - West Coast Swing

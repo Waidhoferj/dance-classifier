@@ -15,6 +15,9 @@ dependencies:
   - requests
   - bidict
   - tqdm
+  - pytorch-lightning
+  - rich
   - pip
     - gradio
+    - wakepy
 prefix: /opt/homebrew/Caskroom/miniforge/base/envs/dancer-net

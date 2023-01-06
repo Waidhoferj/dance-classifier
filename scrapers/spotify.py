@@ -49,14 +49,14 @@ def patch_missing_songs(
         if preview_url is not None:
             row["Sample"] = preview_url
         return row
-    backup_file = open("data/backup_1.csv", "a")
     rows = []
     indices = []
+    after = 18418
+    missing_df = missing_df.iloc[after:]
     total_rows = len(missing_df)
-    for i, row in tqdm(missing_df.iloc[11121:].iterrows(),total=total_rows):
+    for i, row in tqdm(missing_df.iterrows(),total=total_rows):
         patched_row = patch_preview(row)
-        backup_file.write(f"{i}, {patched_row['Sample']}\n")
-        rows.append(patch_preview(row))
+        rows.append(patched_row)
         indices.append(i)
 
 
@@ -65,23 +65,10 @@ def patch_missing_songs(
     return df
 
 
-def download_links():
-    start = 3180
-    with open("data/backup_2.csv") as f:
+def download_links_from_backup(backup_file:str, output_dir:str):
+    with open(backup_file) as f:
         links = [x.split(",")[1].strip() for x in f.readlines()]
-    links = links[start:]
     links = [l for l in links if "https" in l]
-    links = links[2680:]
     for link in tqdm(links, "Songs Downloaded"):
-        download_song(link, "data/spotify-samples")
+        download_song(link, output_dir)
         time.sleep(5e-3) # hopefully wont be rate limited with delay 🤞
-
-
-
-
-if __name__ == "__main__":
-    df = pd.read_csv("data/songs.csv")
-    patched = patch_missing_songs(df)
-    patched.to_csv("data/last_part.csv")
-        
-

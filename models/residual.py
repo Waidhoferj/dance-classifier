@@ -7,13 +7,16 @@ import numpy as np
 import torchaudio
 import yaml
 from .utils import calculate_metrics
-from preprocessing.pipelines import AudioPipeline
+from preprocessing.pipelines import WaveformPreprocessing, AudioToSpectrogram
 
 # Architecture based on: https://github.com/minzwon/sota-music-tagging-models/blob/36aa13b7205ff156cf4dcab60fd69957da453151/training/model.py
 
 class ResidualDancer(nn.Module):
     def __init__(self,n_channels=128, n_classes=50):
         super().__init__()
+
+        self.n_channels = n_channels
+        self.n_classes = n_classes
 
         # Spectrogram
         self.spec_bn = nn.BatchNorm2d(1)
@@ -33,7 +36,7 @@ class ResidualDancer(nn.Module):
         self.dense1 = nn.Linear(n_channels*4, n_channels*4)
         self.bn = nn.BatchNorm1d(n_channels*4)
         self.dense2 = nn.Linear(n_channels*4, n_classes)
-        self.dropout = nn.Dropout(0.3)
+        self.dropout = nn.Dropout(0.2)
 
     def forward(self, x):
         x = self.spec_bn(x)
@@ -88,34 +91,51 @@ class ResBlock(nn.Module):
 
 class TrainingEnvironment(pl.LightningModule):
 
-    def __init__(self, model: nn.Module, criterion: nn.Module, learning_rate=1e-4, *args, **kwargs):
+    def __init__(self, model: nn.Module, criterion: nn.Module, config:dict, learning_rate=1e-4, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.model = model
         self.criterion = criterion
         self.learning_rate = learning_rate
+        self.config=config
+        self.save_hyperparameters({
+            "model": type(model).__name__,
+            "loss": type(criterion).__name__,
+            "config": config,
+             **kwargs
+            })
 
     def training_step(self, batch: tuple[torch.Tensor, torch.TensorType], batch_index: int) -> torch.Tensor:
         features, labels = batch
         outputs = self.model(features)
         loss = self.criterion(outputs, labels)
-        batch_metrics = calculate_metrics(outputs, labels)
-        self.log_dict(batch_metrics)
+        metrics = calculate_metrics(outputs, labels, prefix="train/", multi_label=True)
+        self.log_dict(metrics, prog_bar=True)
+        # Log spectrograms
+        if batch_index % 100 == 0:
+            tensorboard = self.logger.experiment
+            img_index = torch.randint(0, len(features), (1,)).item()
+            img = features[img_index][0]
+            img = (img - img.min()) / (img.max() - img.min())
+            tensorboard.add_image(f"batch: {batch_index}, element: {img_index}", img, 0, dataformats='HW')
         return loss
+
 
     def validation_step(self, batch:tuple[torch.Tensor, torch.TensorType], batch_index:int):
         x, y = batch
         preds = self.model(x)
-        metrics = calculate_metrics(preds, y, prefix="val_")
-        metrics["val_loss"] = self.criterion(preds, y)
-        self.log_dict(metrics)
+        metrics = calculate_metrics(preds, y, prefix="val/", multi_label=True)
+        metrics["val/loss"] = self.criterion(preds, y)
+        self.log_dict(metrics,prog_bar=True)
 
     def test_step(self, batch:tuple[torch.Tensor, torch.TensorType], batch_index:int):
         x, y = batch
         preds = self.model(x)
-        self.log_dict(calculate_metrics(preds, y, prefix="test_"))
+        self.log_dict(calculate_metrics(preds, y, prefix="test/", multi_label=True), prog_bar=True)
     
     def configure_optimizers(self):
-        return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min') {"scheduler": scheduler, "monitor": "val/loss"}
+        return [optimizer] 
         
 
 class DancePredictor:
@@ -133,7 +153,8 @@ class DancePredictor:
         self.expected_duration = expected_duration
         self.threshold = threshold
         self.resample_frequency = resample_frequency
-        self.audio_pipeline = AudioPipeline(input_freq=self.resample_frequency)
+        self.preprocess_waveform = WaveformPreprocessing(resample_frequency * expected_duration)
+        self.audio_to_spectrogram = AudioToSpectrogram(resample_frequency)
         self.labels = np.array(labels)
         self.device = device
         self.model = self.get_model(weight_path)
@@ -155,20 +176,16 @@ class DancePredictor:
 
     @torch.no_grad()
     def __call__(self, waveform: np.ndarray, sample_rate:int) -> dict[str,float]:
-        min_sample_len = sample_rate * self.expected_duration
-        if min_sample_len > len(waveform):
-            raise Exception("You must record for at least 6 seconds")
-        if len(waveform.shape) > 1 and waveform.shape[1] > 1:
+        if len(waveform.shape) > 1 and waveform.shape[1] < waveform.shape[0]:
             waveform = waveform.transpose(1,0)
-            waveform = waveform.mean(axis=0, keepdims=True)
-        else:
+        elif len(waveform.shape) == 1:
             waveform = np.expand_dims(waveform, 0)
-        waveform = waveform[: ,:min_sample_len]
         waveform = torch.from_numpy(waveform.astype("int16"))
         waveform = torchaudio.functional.apply_codec(waveform,sample_rate, "wav", channels_first=True)
 
         waveform = torchaudio.functional.resample(waveform, sample_rate,self.resample_frequency)
-        spectrogram = self.audio_pipeline(waveform)
+        waveform = self.preprocess_waveform(waveform)
+        spectrogram = self.audio_to_spectrogram(waveform)
         spectrogram = spectrogram.unsqueeze(0).to(self.device)
 
         results = self.model(spectrogram)
