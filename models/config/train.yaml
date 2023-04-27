@@ -39,7 +39,6 @@ trainer:
   max_epochs: 50
   min_epochs: 5
   fast_dev_run: False
-  track_grad_norm: 2
   # gradient_clip_val: 0.5
   overfit_batches: 1
 training_environment:

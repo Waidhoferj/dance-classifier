@@ -1,23 +1,27 @@
 name: dancer-net
 channels:
-  - anaconda
-  - conda-forge
-dependencies:
-  - torchvision
   - pytorch
+  - nvidia
+  - conda-forge
+  - anaconda
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchaudio
+  - torchvision
   - numpy
   - pandas
   - seaborn
-  - python=3.10
   - matplotlib
-  - torchaudio
   - bs4
   - requests
   - bidict
   - tqdm
   - pytorch-lightning
   - rich
-  - pip
-    - gradio
-    - wakepy
-prefix: /opt/homebrew/Caskroom/miniforge/base/envs/dancer-net
+  - scikit-learn
+  - tensorboard
+  - pip:
+      - git+https://github.com/huggingface/transformers.git
+      - evaluate
+      - wakepy
