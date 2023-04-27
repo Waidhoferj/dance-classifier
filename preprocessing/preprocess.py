@@ -11,12 +11,11 @@ from tqdm import tqdm
 def url_to_filename(url:str) -> str:
     return f"{url.split('/')[-1]}.wav"
 
-def get_songs_with_audio(df:pd.DataFrame, audio_dir:str) -> pd.DataFrame:
-    audio_urls = df["Sample"].replace(".", np.nan)
+def has_valid_audio(audio_urls:pd.Series, audio_dir:str) -> pd.Series:
+    audio_urls = audio_urls.replace(".", np.nan)
     audio_files = set(os.path.basename(f) for f in Path(audio_dir).iterdir())
-    valid_audio = audio_urls.apply(lambda url : url is not np.nan and url_to_filename(url) in audio_files)
-    df = df[valid_audio]
-    return df
+    valid_audio_mask = audio_urls.apply(lambda url : url is not np.nan and url_to_filename(url) in audio_files)
+    return valid_audio_mask
 
 def validate_audio(audio_urls:pd.Series, audio_dir:str) -> pd.Series:
     """
@@ -95,11 +94,11 @@ def vectorize_multi_label(labels: dict[str,int], unique_labels:np.ndarray) -> np
     return probs
 
 def get_examples(df:pd.DataFrame, audio_dir:str, class_list=None, multi_label=True, min_votes=1) -> tuple[np.ndarray, np.ndarray]:
-    sampled_songs = get_songs_with_audio(df, audio_dir)
-    sampled_songs.loc[:,"DanceRating"] = fix_dance_rating_counts(sampled_songs["DanceRating"])
+    sampled_songs = df[has_valid_audio(df["Sample"], audio_dir)]
+    sampled_songs["DanceRating"] = fix_dance_rating_counts(sampled_songs["DanceRating"])
     if class_list is not None:
         class_list = set(class_list)
-        sampled_songs.loc[:,"DanceRating"] = sampled_songs["DanceRating"].apply(
+        sampled_songs["DanceRating"] = sampled_songs["DanceRating"].apply(
             lambda labels : {k: v for k,v in labels.items() if k in class_list} 
             if not pd.isna(labels) and any(label in class_list and amt > 0 for label, amt in labels.items()) 
             else np.nan)

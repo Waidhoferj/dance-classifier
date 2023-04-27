@@ -136,6 +136,7 @@ class TrainingEnvironment(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min') {"scheduler": scheduler, "monitor": "val/loss"}
         return [optimizer] 
+    
         
 
 class DancePredictor:

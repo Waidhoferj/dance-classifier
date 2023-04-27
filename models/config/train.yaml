@@ -1,4 +1,5 @@
 global:
+  id: ast_ptl
   device: mps
   seed: 42
   dance_ids:
@@ -18,11 +19,11 @@ global:
     - VWZ
     - WCS
 data_module:
-  batch_size: 1024
-  num_workers: 10
-  min_votes: 2
-  song_data_path: data/songs_cleaned.csv
+  song_data_path: data/samples/songs_cleaned.csv
   song_audio_path: data/samples
+  batch_size: 256
+  num_workers: 10
+  min_votes: 1
   dataset_kwargs:
     audio_window_duration: 6
     audio_window_jitter: 1.5
@@ -40,7 +41,8 @@ trainer:
   fast_dev_run: False
   track_grad_norm: 2
   # gradient_clip_val: 0.5
+  overfit_batches: 1
 training_environment:
-  learning_rate: 0.0033
+  learning_rate: 0.00053
 model:
   n_channels: 128
