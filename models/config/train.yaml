@@ -1,6 +1,6 @@
 global:
   id: ast_ptl
-  device: mps
+  device: cuda
   seed: 42
   dance_ids:
     - ATN
@@ -19,10 +19,10 @@ global:
     - VWZ
     - WCS
 data_module:
-  song_data_path: data/samples/songs_cleaned.csv
-  song_audio_path: data/samples
-  batch_size: 256
-  num_workers: 10
+  song_data_path: ../datastores/dance-music/songs_cleaned.csv
+  song_audio_path: ../datastores/dance-music
+  batch_size: 64
+  num_workers: 4
   min_votes: 1
   dataset_kwargs:
     audio_window_duration: 6

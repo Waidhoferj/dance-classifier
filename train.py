@@ -14,9 +14,8 @@ from models.residual import ResidualDancer, TrainingEnvironment
 import yaml
 from preprocessing.dataset import DanceDataModule, WaveformSongDataset, HuggingFaceWaveformSongDataset
 from torch.utils.data import random_split
-from wakepy import keepawake
 import numpy as np
-from transformers import ASTFeatureExtractor, AutoFeatureExtractor, ASTConfig, AutoModelForAudioClassification
+from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 from argparse import ArgumentParser
 
 
@@ -151,5 +150,4 @@ if __name__ == "__main__":
     config = get_config(args.config)
     training_id = config["global"]["id"]
     train = get_training_fn(training_id)
-    with keepawake():
-        train(config)
+    train(config)

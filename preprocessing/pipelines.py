@@ -3,8 +3,6 @@ import torchaudio
 from torchaudio import transforms as taT, functional as taF
 import torch.nn as nn
 
-NOISE_PATH = "data/augmentation/Lab41-SRI-VOiCES-rm1-babb-mc01-stu-clo.wav"
-
 class AudioTrainingPipeline(torch.nn.Module):
     def __init__(self, 
             input_freq=16000,
@@ -13,12 +11,13 @@ class AudioTrainingPipeline(torch.nn.Module):
             freq_mask_size=10,
             time_mask_size=80,
             mask_count = 2,
-            snr_mean=6.0):
+            snr_mean=6.0,
+            noise_path=None):
         super().__init__()
         self.input_freq = input_freq
         self.snr_mean = snr_mean
         self.mask_count = mask_count
-        self.noise = self.get_noise()
+        self.noise = self.get_noise(noise_path)
         self.resample = taT.Resample(input_freq,resample_freq)
         self.preprocess_waveform = WaveformPreprocessing(resample_freq * expected_duration)
         self.audio_to_spectrogram = AudioToSpectrogram(
@@ -28,8 +27,10 @@ class AudioTrainingPipeline(torch.nn.Module):
         self.time_mask = taT.TimeMasking(time_mask_size)
         
 
-    def get_noise(self) -> torch.Tensor:
-        noise, sr = torchaudio.load(NOISE_PATH)
+    def get_noise(self, path) -> torch.Tensor:
+        if path is None:
+            return None
+        noise, sr = torchaudio.load(path)
         if noise.shape[0] > 1:
             noise = noise.mean(0, keepdim=True)
         if sr != self.input_freq:
@@ -37,6 +38,7 @@ class AudioTrainingPipeline(torch.nn.Module):
         return noise
 
     def add_noise(self, waveform:torch.Tensor) -> torch.Tensor:
+        assert self.noise is not None, "Cannot add noise because a noise file was not provided."
         num_repeats = waveform.shape[1] // self.noise.shape[1] + 1
         noise = self.noise.repeat(1,num_repeats)[:, :waveform.shape[1]]
         noise_power = noise.norm(p=2)
@@ -53,7 +55,8 @@ class AudioTrainingPipeline(torch.nn.Module):
         except:
             print("oops")
         waveform = self.preprocess_waveform(waveform)
-        waveform = self.add_noise(waveform)
+        if self.noise is not None:
+            waveform = self.add_noise(waveform)
         spec = self.audio_to_spectrogram(waveform)
 
         # Spectrogram augmentation
