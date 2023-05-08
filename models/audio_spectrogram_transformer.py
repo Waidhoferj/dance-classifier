@@ -1,4 +1,4 @@
-from transformers import ASTFeatureExtractor, AutoFeatureExtractor, ASTConfig, AutoModelForAudioClassification, TrainingArguments, Trainer
+from transformers import ASTModel, AutoFeatureExtractor, ASTConfig, AutoModelForAudioClassification, TrainingArguments, Trainer
 import torch
 from torch import nn
 from sklearn.utils.class_weight import compute_class_weight
@@ -6,6 +6,53 @@ import evaluate
 import numpy as np
 
 accuracy = evaluate.load("accuracy")
+
+
+class MultiModalAST(nn.Module):
+
+
+    def __init__(self, labels, sample_rate, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        id2label, label2id = get_id_label_mapping(labels)
+        model_checkpoint = "MIT/ast-finetuned-audioset-10-10-0.4593"
+        self.ast_feature_extractor = AutoFeatureExtractor.from_pretrained(model_checkpoint)
+
+        self.ast_model = ASTModel.from_pretrained(
+        model_checkpoint, 
+        num_labels=len(label2id),
+        label2id=label2id,
+        id2label=id2label,
+        ignore_mismatched_sizes=True
+        )
+        self.sample_rate = sample_rate
+        
+        self.bpm_model = nn.Sequential(
+            nn.Linear(len(labels), 100),
+            nn.Linear(100, 50)
+        )
+
+        out_dim = 50 # TODO: Calculate output dimension
+        self.classifier = nn.Sequential(
+            nn.Linear(out_dim, 100),
+            nn.Linear(100, len(labels))
+        )
+    
+    def vectorize_bpm(self, waveform):
+        pass
+    
+
+    def forward(self, audio):
+
+        bpm_vector = self.vectorize_bpm(audio)
+        bpm_out = self.bpm_model(bpm_vector)
+
+        spectrogram = self.ast_feature_extractor(audio)
+        ast_out = self.ast_model(spectrogram)
+
+        # Late fusion
+        z = torch.cat([ast_out, bpm_out]) # Which dimension?
+        return self.classifier(z)
+
 
 def compute_metrics(eval_pred):
     predictions = np.argmax(eval_pred.predictions, axis=1)

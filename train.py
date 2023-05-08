@@ -11,6 +11,7 @@ from models.audio_spectrogram_transformer import train as train_audio_spectrogra
 from preprocessing.dataset import SongDataset, WaveformTrainingEnvironment
 from preprocessing.preprocess import get_examples
 from models.residual import ResidualDancer, TrainingEnvironment
+from models.decision_tree import DanceTreeClassifier, features_from_path
 import yaml
 from preprocessing.dataset import DanceDataModule, WaveformSongDataset, HuggingFaceWaveformSongDataset
 from torch.utils.data import random_split
@@ -32,6 +33,8 @@ def get_training_fn(id:str) -> Callable:
             return train_ast
         case "residual_dancer":
             return train_model
+        case "decision_tree":
+            return train_decision_tree
         case _:
             raise Exception(f"Couldn't find a training function for '{id}'.")
 
@@ -143,9 +146,31 @@ def train_ast_lightning(config:dict):
     trainer.fit(train_env, datamodule=data)
     trainer.test(train_env, datamodule=data)
 
+
+def train_decision_tree(config:dict):
+    TARGET_CLASSES = config["global"]["dance_ids"]
+    DEVICE = config["global"]["device"]
+    SEED = config["global"]["seed"]
+    song_data_path=config['data_module']["song_data_path"]
+    song_audio_path = config['data_module']["song_audio_path"]
+    pl.seed_everything(SEED, workers=True)
+
+    df = pd.read_csv(song_data_path)
+    x, y = get_examples(df, song_audio_path,class_list=TARGET_CLASSES, multi_label=True)
+    # Convert y back to string classes
+    y = np.array(TARGET_CLASSES)[y.argmax(-1)]
+    train_i, test_i = random_split(np.arange(len(x)), [0.8, 0.2])
+    train_paths, train_y = x[train_i], y[train_i]
+    train_x = features_from_path(train_paths)
+    model = DanceTreeClassifier(device=DEVICE)
+    model.fit(train_x, train_y)
+    model.save()
+
 if __name__ == "__main__":
     parser = ArgumentParser(description="Trains models on the dance dataset and saves weights.")
-    parser.add_argument("--config", help="Path to the yaml file that defines the training configuration.", default="models/config/train.yaml")
+    parser.add_argument("--config", 
+                        help="Path to the yaml file that defines the training configuration.", 
+                        default="models/config/train.yaml")
     args = parser.parse_args()
     config = get_config(args.config)
     training_id = config["global"]["id"]
