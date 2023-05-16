@@ -22,7 +22,7 @@ dependencies:
   - rich
   - scikit-learn
   - tensorboard
+  - transformers
   - pip:
-      - git+https://github.com/huggingface/transformers.git
       - evaluate
       - wakepy

@@ -9,3 +9,7 @@
 - Read the Medium series about audio DL
 - double check \_rectify_duration
 - ✅ Filter out songs that have only one vote
+
+## Notes
+
+2xM60 insufficient memory.

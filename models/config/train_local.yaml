@@ -1,5 +1,5 @@
 global:
-  id: decision_tree
+  id: ast_ptl # decision_tree
   device: mps
   seed: 42
   dance_ids:
@@ -22,7 +22,7 @@ data_module:
   song_data_path: data/songs_cleaned.csv
   song_audio_path: data/samples
   batch_size: 32
-  num_workers: 4
+  num_workers: 7
   min_votes: 1
   dataset_kwargs:
     audio_window_duration: 6
