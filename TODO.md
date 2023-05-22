@@ -12,6 +12,8 @@
 - ✅ Download songs from [Best Ballroom](https://www.youtube.com/channel/UC0bYSnzAFMwPiEjmVsrvmRg)
 
 - ✅ fix nan values
+- Try higher mels (224) and more ffts (2048)
+- Verify random sample of dataset outputs by hand.
 
 ## Notes
 

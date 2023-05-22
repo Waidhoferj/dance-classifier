@@ -1,6 +1,7 @@
+import importlib
 from models.utils import calculate_metrics
 
-
+from abc import ABC, abstractmethod
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
@@ -13,7 +14,6 @@ class TrainingEnvironment(pl.LightningModule):
         criterion: nn.Module,
         config: dict,
         learning_rate=1e-4,
-        log_spectrograms=False,
         *args,
         **kwargs,
     ):
@@ -21,7 +21,9 @@ class TrainingEnvironment(pl.LightningModule):
         self.model = model
         self.criterion = criterion
         self.learning_rate = learning_rate
-        self.log_spectrograms = log_spectrograms
+        self.experiment_loggers = load_loggers(
+            config["training_environment"].get("loggers", {})
+        )
         self.config = config
         self.has_multi_label_predictions = (
             not type(criterion).__name__ == "CrossEntropyLoss"
@@ -48,15 +50,9 @@ class TrainingEnvironment(pl.LightningModule):
             multi_label=self.has_multi_label_predictions,
         )
         self.log_dict(metrics, prog_bar=True)
-        # Log spectrograms
-        if self.log_spectrograms and batch_index % 100 == 0:
-            tensorboard = self.logger.experiment
-            img_index = torch.randint(0, len(features), (1,)).item()
-            img = features[img_index][0]
-            img = (img - img.min()) / (img.max() - img.min())
-            tensorboard.add_image(
-                f"batch: {batch_index}, element: {img_index}", img, 0, dataformats="HW"
-            )
+        experiment = self.logger.experiment
+        for logger in self.experiment_loggers:
+            logger.step(experiment, batch_index, features, labels)
         return loss
 
     def validation_step(
@@ -88,3 +84,36 @@ class TrainingEnvironment(pl.LightningModule):
             "lr_scheduler": scheduler,
             "monitor": "val/loss",
         }
+
+
+class ExperimentLogger(ABC):
+    @abstractmethod
+    def step(self, experiment, data):
+        pass
+
+
+class SpectrogramLogger(ExperimentLogger):
+    def __init__(self, frequency=100) -> None:
+        self.frequency = frequency
+        self.counter = 0
+
+    def step(self, experiment, batch_index, x, label):
+        if self.counter == self.frequency:
+            self.counter = 0
+            img_index = torch.randint(0, len(x), (1,)).item()
+            img = x[img_index][0]
+            img = (img - img.min()) / (img.max() - img.min())
+            experiment.add_image(
+                f"batch: {batch_index}, element: {img_index}", img, 0, dataformats="HW"
+            )
+        self.counter += 1
+
+
+def load_loggers(logger_config: dict) -> list[ExperimentLogger]:
+    loggers = []
+    for logger_path, kwargs in logger_config.items():
+        module_name, class_name = logger_path.rsplit(".", 1)
+        module = importlib.import_module(module_name)
+        Logger = getattr(module, class_name)
+        loggers.append(Logger(**kwargs))
+    return loggers
