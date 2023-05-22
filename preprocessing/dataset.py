@@ -2,7 +2,7 @@ import importlib
 import os
 from typing import Any
 import torch
-from torch.utils.data import Dataset, DataLoader, random_split, ConcatDataset
+from torch.utils.data import Dataset, DataLoader, random_split, ConcatDataset, Subset
 import numpy as np
 import pandas as pd
 import torchaudio as ta
@@ -278,6 +278,7 @@ class DanceDataModule(pl.LightningDataModule):
         target_classes: list[str] = None,
         batch_size: int = 64,
         num_workers=10,
+        data_subset=None,
     ):
         super().__init__()
         self.val_proportion = val_proportion
@@ -286,6 +287,10 @@ class DanceDataModule(pl.LightningDataModule):
         self.target_classes = target_classes
         self.batch_size = batch_size
         self.num_workers = num_workers
+
+        if data_subset is not None and float(data_subset) != 1.0:
+            dataset, _ = random_split(dataset, [data_subset, 1 - data_subset])
+
         self.dataset = dataset
 
     def setup(self, stage: str):
@@ -317,9 +322,10 @@ class DanceDataModule(pl.LightningDataModule):
         )
 
     def get_label_weights(self):
-        weights = [
-            ds.song_dataset.get_label_weights() for ds in self.dataset._data.datasets
-        ]
+        dataset = (
+            self.dataset.dataset if isinstance(self.dataset, Subset) else self.dataset
+        )
+        weights = [ds.song_dataset.get_label_weights() for ds in dataset._data.datasets]
         return torch.mean(torch.stack(weights), dim=0)  # TODO: Make this weighted
 
 
@@ -349,3 +355,18 @@ def get_datasets(dataset_config: dict, feature_extractor) -> Dataset:
         ProvidedDataset = getattr(module, class_name)
         datasets.append(ProvidedDataset(**kwargs))
     return PipelinedDataset(ConcatDataset(datasets), feature_extractor)
+
+
+def get_class_counts(config: dict):
+    # TODO: Figure out why music4dance has fractional labels
+    dataset = get_datasets(config["datasets"], lambda x: x)
+    counts = sum(
+        np.sum(
+            np.arange(len(config["dance_ids"]))
+            == np.expand_dims(ds.song_dataset.dance_labels.argmax(1), 1),
+            axis=0,
+        )
+        for ds in dataset._data.datasets
+    )
+    labels = sorted(config["dance_ids"])
+    return dict(zip(labels, counts))
