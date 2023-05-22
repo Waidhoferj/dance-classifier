@@ -18,7 +18,7 @@ dance_ids: &dance_ids
 
 data_module:
   batch_size: 64
-  num_workers: 10
+  num_workers: 5
   test_proportion: 0.2
 
 datasets:
@@ -50,4 +50,3 @@ trainer:
 
 training_environment:
   learning_rate: 0.00053
-  log_spectrograms: False
