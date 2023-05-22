@@ -1,11 +1,7 @@
 import torch.nn as nn
 import torch
 import numpy as np
-import evaluate
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
-
-
-accuracy = evaluate.load("accuracy")
 
 
 class LabelWeightedBCELoss(nn.Module):
@@ -86,4 +82,4 @@ def get_id_label_mapping(labels: list[str]) -> tuple[dict, dict]:
 
 def compute_hf_metrics(eval_pred):
     predictions = np.argmax(eval_pred.predictions, axis=1)
-    return accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
+    return accuracy_score(y_true=eval_pred.label_ids, y_pred=predictions)
