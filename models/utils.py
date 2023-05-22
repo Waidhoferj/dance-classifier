@@ -37,7 +37,9 @@ def calculate_metrics(
     pred, target, threshold=0.5, prefix="", multi_label=True
 ) -> dict[str, torch.Tensor]:
     target = target.detach().cpu().numpy()
-    pred = pred.detach().cpu().numpy()
+    pred = pred.detach().cpu()
+    pred = nn.functional.softmax(pred, dim=1)
+    pred = pred.numpy()
     params = {
         "y_true": target if multi_label else target.argmax(1),
         "y_pred": np.array(pred > threshold, dtype=float)

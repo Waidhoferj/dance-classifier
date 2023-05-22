@@ -80,7 +80,9 @@ class SongDataset(Dataset):
 
     def get_label_weights(self):
         n_examples, n_classes = self.dance_labels.shape
-        return torch.from_numpy(n_examples / (n_classes * sum(self.dance_labels)))
+        weights = n_examples / (n_classes * sum(self.dance_labels))
+        weights[np.isinf(weights)] = 0.0
+        return torch.from_numpy(weights)
 
     def _backtrace_audio_path(self, index: int) -> str:
         return self.audio_paths[self._idx2audio_idx(index)]
