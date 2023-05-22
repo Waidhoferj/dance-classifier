@@ -3,7 +3,9 @@ import numpy as np
 import re
 import json
 from pathlib import Path
+import glob
 import os
+import shutil
 import torchaudio
 import torch
 from tqdm import tqdm
@@ -95,7 +97,6 @@ def vectorize_label_probs(
     for k, v in labels.items():
         item_vec = (unique_labels == k) * v
         label_vec += item_vec
-    lv_cache = label_vec.copy()
     label_vec[label_vec < 0] = 0
     label_vec /= label_vec.sum()
     assert not any(np.isnan(label_vec)), f"Provided labels are invalid: {labels}"
@@ -113,49 +114,70 @@ def vectorize_multi_label(
     return probs
 
 
-def get_examples(
-    df: pd.DataFrame, audio_dir: str, class_list=None, multi_label=True, min_votes=1
-) -> tuple[np.ndarray, np.ndarray]:
-    sampled_songs = df[has_valid_audio(df["Sample"], audio_dir)].copy(deep=True)
-    sampled_songs["DanceRating"] = fix_dance_rating_counts(sampled_songs["DanceRating"])
-    if class_list is not None:
-        class_list = set(class_list)
-        sampled_songs["DanceRating"] = sampled_songs["DanceRating"].apply(
-            lambda labels: {k: v for k, v in labels.items() if k in class_list}
-            if not pd.isna(labels)
-            and any(label in class_list and amt > 0 for label, amt in labels.items())
-            else np.nan
-        )
-    sampled_songs = sampled_songs.dropna(subset=["DanceRating"])
-    vote_mask = sampled_songs["DanceRating"].apply(
-        lambda dances: any(votes >= min_votes for votes in dances.values())
-    )
-    sampled_songs = sampled_songs[vote_mask]
-    labels = sampled_songs["DanceRating"].apply(
-        lambda dances: {
-            dance: votes for dance, votes in dances.items() if votes >= min_votes
-        }
-    )
-    unique_labels = np.array(get_unique_labels(labels))
-    vectorizer = vectorize_multi_label if multi_label else vectorize_label_probs
-    labels = labels.apply(lambda i: vectorizer(i, unique_labels))
+def sort_yt_files(
+    aliases_path="data/dance_aliases.json",
+    all_dances_folder="data/best-ballroom-music",
+    original_location="data/yt-ballroom-music/",
+):
+    def normalize_string(s):
+        # Lowercase string and remove special characters
+        return re.sub(r"\W+", "", s.lower())
 
-    audio_paths = [
-        os.path.join(audio_dir, url_to_filename(url)) for url in sampled_songs["Sample"]
-    ]
+    with open(aliases_path, "r") as f:
+        dances = json.load(f)
 
-    return np.array(audio_paths), np.stack(labels)
+    # Normalize the dance inputs and aliases
+    normalized_dances = {
+        normalize_string(dance_id): [normalize_string(alias) for alias in aliases]
+        for dance_id, aliases in dances.items()
+    }
+
+    # For every wav file in the target folder
+    bad_files = []
+    progress_bar = tqdm(os.listdir(all_dances_folder), unit="files moved")
+    for file_name in progress_bar:
+        if file_name.endswith(".wav"):
+            # check if the normalized wav file name contains the normalized dance alias
+            normalized_file_name = normalize_string(file_name)
+
+            matching_dance_ids = [
+                dance_id
+                for dance_id, aliases in normalized_dances.items()
+                if any(alias in normalized_file_name for alias in aliases)
+            ]
+
+            if len(matching_dance_ids) == 0:
+                # See if the dance is in the path
+                original_filename = file_name.replace(".wav", "")
+                matches = glob.glob(
+                    os.path.join(original_location, "**", original_filename),
+                    recursive=True,
+                )
+                if len(matches) == 1:
+                    normalized_file_name = normalize_string(matches[0])
+                    matching_dance_ids = [
+                        dance_id
+                        for dance_id, aliases in normalized_dances.items()
+                        if any(alias in normalized_file_name for alias in aliases)
+                    ]
+
+            if "swz" in matching_dance_ids and "vwz" in matching_dance_ids:
+                matching_dance_ids.remove("swz")
+            if len(matching_dance_ids) > 1 and "lhp" in matching_dance_ids:
+                matching_dance_ids.remove("lhp")
+
+            if len(matching_dance_ids) != 1:
+                bad_files.append(file_name)
+                progress_bar.set_description(f"bad files: {len(bad_files)}")
+                continue
+            dst = os.path.join("data", "ballroom-songs", matching_dance_ids[0].upper())
+            os.makedirs(dst, exist_ok=True)
+            filepath = os.path.join(all_dances_folder, file_name)
+            shutil.copy(filepath, os.path.join(dst, file_name))
+
+    with open("data/bad_files.json", "w") as f:
+        json.dump(bad_files, f)
 
 
 if __name__ == "__main__":
-    links = pd.read_csv("data/backup_2.csv", index_col="index")
-    df = pd.read_csv("data/songs.csv")
-    l = links["link"].str.strip()
-    l = l.apply(lambda url: url if "http" in url else np.nan)
-    l = l.dropna()
-    df["Sample"].update(l)
-    addna = lambda url: url if type(url) == str and "http" in url else np.nan
-    df["Sample"] = df["Sample"].apply(addna)
-    is_valid = validate_audio(df["Sample"], "data/samples")
-    df["valid"] = is_valid
-    df.to_csv("data/songs_validated.csv")
+    sort_yt_files()

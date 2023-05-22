@@ -1,93 +1,138 @@
-from transformers import ASTModel, AutoFeatureExtractor, ASTConfig, AutoModelForAudioClassification, TrainingArguments, Trainer
+from typing import Any
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from transformers import (
+    AutoFeatureExtractor,
+    AutoModelForAudioClassification,
+    TrainingArguments,
+    Trainer,
+    ASTConfig,
+    ASTFeatureExtractor,
+    ASTForAudioClassification,
+)
 import torch
 from torch import nn
-from sklearn.utils.class_weight import compute_class_weight
-import evaluate
-import numpy as np
+from models.training_environment import TrainingEnvironment
+from preprocessing.pipelines import WaveformTrainingPipeline
 
-accuracy = evaluate.load("accuracy")
+from preprocessing.dataset import (
+    DanceDataModule,
+    HuggingFaceDatasetWrapper,
+    get_datasets,
+)
+from preprocessing.dataset import get_music4dance_examples
+from .utils import get_id_label_mapping, compute_hf_metrics
+
+import pytorch_lightning as pl
+from pytorch_lightning import callbacks as cb
+
+MODEL_CHECKPOINT = "MIT/ast-finetuned-audioset-10-10-0.4593"
 
 
-class MultiModalAST(nn.Module):
-
-
-    def __init__(self, labels, sample_rate, *args, **kwargs) -> None:
+class AST(nn.Module):
+    def __init__(self, labels, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         id2label, label2id = get_id_label_mapping(labels)
-        model_checkpoint = "MIT/ast-finetuned-audioset-10-10-0.4593"
-        self.ast_feature_extractor = AutoFeatureExtractor.from_pretrained(model_checkpoint)
-
-        self.ast_model = ASTModel.from_pretrained(
-        model_checkpoint, 
-        num_labels=len(label2id),
-        label2id=label2id,
-        id2label=id2label,
-        ignore_mismatched_sizes=True
+        config = ASTConfig(
+            hidden_size=300,
+            num_attention_heads=5,
+            num_hidden_layers=3,
+            id2label=id2label,
+            label2id=label2id,
+            num_labels=len(label2id),
+            ignore_mismatched_sizes=True,
         )
-        self.sample_rate = sample_rate
-        
-        self.bpm_model = nn.Sequential(
-            nn.Linear(len(labels), 100),
-            nn.Linear(100, 50)
+        self.model = ASTForAudioClassification(config)
+
+    def forward(self, x):
+        return self.model(x).logits
+
+
+class ASTExtractorWrapper:
+    def __init__(self, sampling_rate=16000, return_tensors="pt") -> None:
+        self.extractor = ASTFeatureExtractor()
+        self.sampling_rate = sampling_rate
+        self.return_tensors = return_tensors
+        self.waveform_pipeline = WaveformTrainingPipeline()  # TODO configure from yaml
+
+    def __call__(self, x) -> Any:
+        x = self.waveform_pipeline(x)
+        device = x.device
+        x = x.squeeze(0).numpy()
+        x = self.extractor(
+            x, return_tensors=self.return_tensors, sampling_rate=self.sampling_rate
         )
-
-        out_dim = 50 # TODO: Calculate output dimension
-        self.classifier = nn.Sequential(
-            nn.Linear(out_dim, 100),
-            nn.Linear(100, len(labels))
-        )
-    
-    def vectorize_bpm(self, waveform):
-        pass
-    
-
-    def forward(self, audio):
-
-        bpm_vector = self.vectorize_bpm(audio)
-        bpm_out = self.bpm_model(bpm_vector)
-
-        spectrogram = self.ast_feature_extractor(audio)
-        ast_out = self.ast_model(spectrogram)
-
-        # Late fusion
-        z = torch.cat([ast_out, bpm_out]) # Which dimension?
-        return self.classifier(z)
+        return x["input_values"].squeeze(0).to(device)
 
 
-def compute_metrics(eval_pred):
-    predictions = np.argmax(eval_pred.predictions, axis=1)
-    return accuracy.compute(predictions=predictions, references=eval_pred.label_ids)
+def train_lightning_ast(config: dict):
+    """
+    work on integration between waveform dataset and environment. Should work for both HF and PTL.
+    """
+    TARGET_CLASSES = config["dance_ids"]
+    DEVICE = config["device"]
+    SEED = config["seed"]
+    pl.seed_everything(SEED, workers=True)
+    feature_extractor = ASTExtractorWrapper()
+    dataset = get_datasets(config["datasets"], feature_extractor)
+    data = DanceDataModule(
+        dataset,
+        target_classes=TARGET_CLASSES,
+        **config["data_module"],
+    )
 
-def get_id_label_mapping(labels:list[str]) -> tuple[dict, dict]:
-    id2label = {str(i) : label for i, label in enumerate(labels)}
-    label2id = {label : str(i) for i, label in enumerate(labels)}
+    model = AST(TARGET_CLASSES).to(DEVICE)
+    label_weights = data.get_label_weights().to(DEVICE)
+    criterion = nn.CrossEntropyLoss(
+        label_weights
+    )  # LabelWeightedBCELoss(label_weights)
+    train_env = TrainingEnvironment(model, criterion, config)
+    callbacks = [
+        # cb.LearningRateFinder(update_attr=True),
+        cb.EarlyStopping("val/loss", patience=5),
+        cb.RichProgressBar(),
+    ]
+    trainer = pl.Trainer(callbacks=callbacks, **config["trainer"])
+    trainer.fit(train_env, datamodule=data)
+    trainer.test(train_env, datamodule=data)
 
-    return id2label, label2id
 
-def train(
-        labels,
-        train_ds, 
-        test_ds, 
-        output_dir="models/weights/ast",
-        device="cpu",
-        batch_size=128,
-        epochs=10):
-    id2label, label2id = get_id_label_mapping(labels)
+def train_huggingface_ast(config: dict):
+    TARGET_CLASSES = config["dance_ids"]
+    DEVICE = config["device"]
+    SEED = config["seed"]
+    OUTPUT_DIR = "models/weights/ast"
+    batch_size = config["data_module"]["batch_size"]
+    epochs = config["data_module"]["min_epochs"]
+    test_proportion = config["data_module"].get("test_proportion", 0.2)
+    pl.seed_everything(SEED, workers=True)
+    dataset = get_datasets(config["datasets"])
+    hf_dataset = HuggingFaceDatasetWrapper(dataset)
+    id2label, label2id = get_id_label_mapping(TARGET_CLASSES)
     model_checkpoint = "MIT/ast-finetuned-audioset-10-10-0.4593"
     feature_extractor = AutoFeatureExtractor.from_pretrained(model_checkpoint)
-    preprocess_waveform = lambda wf : feature_extractor(wf, sampling_rate=train_ds.resample_frequency, padding="max_length", return_tensors="pt")
-    train_ds.map(preprocess_waveform)
-    test_ds.map(preprocess_waveform)
+    preprocess_waveform = lambda wf: feature_extractor(
+        wf,
+        sampling_rate=train_ds.resample_frequency,
+        # padding="max_length",
+        # return_tensors="pt",
+    )
+    hf_dataset.append_to_pipeline(preprocess_waveform)
+    test_proportion = config["data_module"]["test_proportion"]
+    train_proporition = 1 - test_proportion
+    train_ds, test_ds = torch.utils.data.random_split(
+        hf_dataset, [train_proporition, test_proportion]
+    )
 
     model = AutoModelForAudioClassification.from_pretrained(
-    model_checkpoint, 
-    num_labels=len(labels),
-    label2id=label2id,
-    id2label=id2label,
-    ignore_mismatched_sizes=True
-).to(device)
+        model_checkpoint,
+        num_labels=len(TARGET_CLASSES),
+        label2id=label2id,
+        id2label=id2label,
+        ignore_mismatched_sizes=True,
+    ).to(DEVICE)
     training_args = TrainingArguments(
-        output_dir=output_dir,
+        output_dir=OUTPUT_DIR,
         evaluation_strategy="epoch",
         save_strategy="epoch",
         learning_rate=5e-5,
@@ -100,7 +145,7 @@ def train(
         load_best_model_at_end=True,
         metric_for_best_model="accuracy",
         push_to_hub=False,
-        use_mps_device=device == "mps"
+        use_mps_device=DEVICE == "mps",
     )
 
     trainer = Trainer(
@@ -109,11 +154,7 @@ def train(
         train_dataset=train_ds,
         eval_dataset=test_ds,
         tokenizer=feature_extractor,
-        compute_metrics=compute_metrics,
+        compute_metrics=compute_hf_metrics,
     )
     trainer.train()
     return model
-
-
-    
-

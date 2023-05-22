@@ -23,6 +23,11 @@ dependencies:
   - scikit-learn
   - tensorboard
   - transformers
+  - accelerate
+  - pytest
+
   - pip:
       - evaluate
       - wakepy
+      - soundfile
+      - youtube_dl

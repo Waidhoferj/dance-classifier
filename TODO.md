@@ -6,10 +6,13 @@
 - Create an attention-based network
 - ✅ Increase parameter count in network
 - Verify that labels really match what is on the music4dance site
-- Read the Medium series about audio DL
+- ✅ Read the Medium series about audio DL
 - double check \_rectify_duration
 - ✅ Filter out songs that have only one vote
+- ✅ Download songs from [Best Ballroom](https://www.youtube.com/channel/UC0bYSnzAFMwPiEjmVsrvmRg)
+
+- ✅ fix nan values
 
 ## Notes
 
-2xM60 insufficient memory.
+2xM60 insufficient memory for the AST.

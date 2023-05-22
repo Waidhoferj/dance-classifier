@@ -1,3 +1,4 @@
+import pytorch_lightning as pl
 from sklearn.base import ClassifierMixin, BaseEstimator
 import pandas as pd
 from torch import nn
@@ -5,8 +6,14 @@ import torch
 from typing import Iterator
 import numpy as np
 import json
+from torch.utils.data import random_split
 from tqdm import tqdm
 import librosa
+from joblib import dump, load
+from os import path
+import os
+
+from preprocessing.dataset import get_music4dance_examples
 
 DANCE_INFO_FILE = "data/dance_info.csv"
 dance_info_df = pd.read_csv(
@@ -24,9 +31,8 @@ class DanceTreeClassifier(BaseEstimator, ClassifierMixin):
         - BPM
     """
 
-    def __init__(self, device="cpu", lr=1e-4, epochs=5, verbose=True) -> None:
+    def __init__(self, device="cpu", lr=1e-4, verbose=True) -> None:
         self.device = device
-        self.epochs = epochs
         self.verbose = verbose
         self.lr = lr
         self.classifiers = {}
@@ -44,41 +50,40 @@ class DanceTreeClassifier(BaseEstimator, ClassifierMixin):
         x: (specs, bpms). The first element is the spectrogram, second element is the bpm. spec shape should be (channel, freq_bins, sr * time)
         y: (batch_size, n_classes)
         """
-        progress_bar = tqdm(range(self.epochs))
-        for _ in progress_bar:
-            # TODO: Introduce batches
-            epoch_loss = 0
-            pred_count = 0
-            step = 0
-            for (spec, bpm), label in zip(x, y):
-                step += 1
-                # find all models that are in the bpm range
-                matching_dances = self.get_valid_dances_from_bpm(bpm)
-                spec = torch.from_numpy(spec).to(self.device)
-                for dance in matching_dances:
-                    if dance not in self.classifiers or dance not in self.optimizers:
-                        classifier = DanceCNN().to(self.device)
-                        self.classifiers[dance] = classifier
-                        self.optimizers[dance] = torch.optim.Adam(
-                            classifier.parameters(), lr=self.lr
-                        )
-                models = [
-                    (dance, model, self.optimizers[dance])
-                    for dance, model in self.classifiers.items()
-                    if dance in matching_dances
-                ]
-                for model_i, (dance, model, opt) in enumerate(models):
-                    opt.zero_grad()
-                    output = model(spec)
-                    target = torch.tensor([float(dance == label)], device=self.device)
-                    loss = self.criterion(output, target)
-                    epoch_loss += loss.item()
-                    pred_count += 1
-                    loss.backward()
-                    opt.step()
-                    progress_bar.set_description(
-                        f"Loss: {epoch_loss / pred_count}, Step: {step}, Model: {model_i+1}/{len(models)}"
+        epoch_loss = 0
+        pred_count = 0
+        data_loader = zip(x, y)
+        if self.verbose:
+            data_loader = tqdm(data_loader, total=len(y))
+        for (spec, bpm), label in data_loader:
+            # find all models that are in the bpm range
+            matching_dances = self.get_valid_dances_from_bpm(bpm)
+            spec = torch.from_numpy(spec).to(self.device)
+            for dance in matching_dances:
+                if dance not in self.classifiers or dance not in self.optimizers:
+                    classifier = DanceCNN().to(self.device)
+                    self.classifiers[dance] = classifier
+                    self.optimizers[dance] = torch.optim.Adam(
+                        classifier.parameters(), lr=self.lr
                     )
+            models = [
+                (dance, model, self.optimizers[dance])
+                for dance, model in self.classifiers.items()
+                if dance in matching_dances
+            ]
+            for model_i, (dance, model, opt) in enumerate(models, start=1):
+                opt.zero_grad()
+                output = model(spec)
+                target = torch.tensor([float(dance == label)], device=self.device)
+                loss = self.criterion(output, target)
+                epoch_loss += loss.item()
+                pred_count += 1
+                loss.backward()
+                if self.verbose:
+                    data_loader.set_description(
+                        f"model: {model_i}/{len(models)}, loss: {loss.item()}"
+                    )
+                opt.step()
 
     def predict(self, x) -> list[str]:
         results = []
@@ -89,6 +94,52 @@ class DanceTreeClassifier(BaseEstimator, ClassifierMixin):
             ).argmax()
             results.append(matching_dances[dance_i])
         return results
+
+    def save(self, folder: str):
+        # Create a folder
+        classifier_path = path.join(folder, "classifier")
+        os.makedirs(classifier_path, exist_ok=True)
+
+        # Swap out model reference
+        classifiers = self.classifiers
+        optimizers = self.optimizers
+        criterion = self.criterion
+
+        self.classifiers = None
+        self.optimizers = None
+        self.criterion = None
+
+        # Save the Pth models
+        for dance, classifier in classifiers.items():
+            torch.save(
+                classifier.state_dict(), path.join(classifier_path, dance + ".pth")
+            )
+
+        # Save the Sklearn model
+        dump(path.join(folder, "sklearn.joblib"))
+
+        # Reload values
+        self.classifiers = classifiers
+        self.optimizers = optimizers
+        self.criterion = criterion
+
+    @staticmethod
+    def from_config(folder: str, device="cpu") -> "DanceTreeClassifier":
+        # load in weights
+        model_paths = (
+            p for p in os.listdir(path.join(folder, "classifier")) if p.endswith("pth")
+        )
+        classifiers = {}
+        for model_path in model_paths:
+            dance = model_path.split(".")[0]
+            model = DanceCNN().to(device)
+            model.load_state_dict(
+                torch.load(path.join(folder, "classifier", model_path))
+            )
+            classifiers[dance] = model
+        wrapper = load(path.join(folder, "sklearn.joblib"))
+        wrapper.classifiers = classifiers
+        return wrapper
 
 
 class DanceCNN(nn.Module):
@@ -136,7 +187,6 @@ def features_from_path(
         num_frames = audio_window_duration * sr
         tempo, _ = librosa.beat.beat_track(y=waveform, sr=sr)
         spec = librosa.feature.melspectrogram(y=waveform, sr=sr)
-        mfccs = librosa.feature.mfcc(y=waveform, sr=sr, n_mfcc=20)
         spec_normalized = (spec - spec.mean()) / spec.std()
         spec_padded = librosa.util.fix_length(
             spec_normalized, size=sr * audio_duration, axis=1
@@ -145,3 +195,40 @@ def features_from_path(
         for i in range(audio_duration // audio_window_duration):
             spec_window = batched_spec[:, :, i * num_frames : (i + 1) * num_frames]
             yield (spec_window, tempo)
+
+
+def train_decision_tree(config: dict):
+    TARGET_CLASSES = config["global"]["dance_ids"]
+    DEVICE = config["global"]["device"]
+    SEED = config["global"]["seed"]
+    SEED = config["global"]["seed"]
+    EPOCHS = config["trainer"]["min_epochs"]
+    song_data_path = config["data_module"]["song_data_path"]
+    song_audio_path = config["data_module"]["song_audio_path"]
+    pl.seed_everything(SEED, workers=True)
+
+    df = pd.read_csv(song_data_path)
+    x, y = get_music4dance_examples(
+        df, song_audio_path, class_list=TARGET_CLASSES, multi_label=True
+    )
+    # Convert y back to string classes
+    y = np.array(TARGET_CLASSES)[y.argmax(-1)]
+    train_i, test_i = random_split(
+        np.arange(len(x)), [0.1, 0.9]
+    )  # Temporary to test efficacy
+    train_paths, train_y = x[train_i], y[train_i]
+    model = DanceTreeClassifier(device=DEVICE)
+    for epoch in tqdm(range(1, EPOCHS + 1)):
+        # Shuffle the data
+        i = np.arange(len(train_paths))
+        np.random.shuffle(i)
+        train_paths = train_paths[i]
+        train_y = train_y[i]
+        train_x = features_from_path(train_paths)
+        model.fit(train_x, train_y)
+
+    # evaluate the model
+    preds = model.predict(x[test_i])
+    accuracy = (preds == y[test_i]).mean()
+    print(f"{accuracy=}")
+    model.save("models/weights/decision_tree")
