@@ -19,3 +19,26 @@ Classifies the dance style that best accompanies a provided song. Users record o
 1. Download dependencies: `conda env create --file environment.yml`
 2. Open environment: `conda activate dancer-net`
 3. Start the demo application: `python app.py`
+
+## Training
+
+You can update and train models with the `train.py` script. The specific logic for training each model can be found in training functions located in the [models folder](./models/). You can customize and parameterize these training loops by directing the training script towards a custom [yaml config file](./models/config/).
+
+```bash
+# Train a model using a custom configuration
+python train.py --config models/config/train_local.yaml
+```
+
+The training loops output the weights into either the `models/weights` or `lightning_logs` directories depending on the training script. You can then reference these pretrained weights for inference.
+
+### Model Configuration
+
+The YAML configuration files for training are located in [`models/config`](./models/config/). They specify the training environment, data, architecture, and hyperparameters of the model.
+
+## Testing
+
+See tests in the `tests` folder. Use Pytest to run the tests.
+
+```bash
+pytest
+```
