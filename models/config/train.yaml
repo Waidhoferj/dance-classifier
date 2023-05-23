@@ -1,4 +1,4 @@
-training_fn: audio_spectrogram_transformer.train_lightning_ast
+training_fn: wav2vec2.train_huggingface
 device: cuda
 seed: 42
 dance_ids: &dance_ids
