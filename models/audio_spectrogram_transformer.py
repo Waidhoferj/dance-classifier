@@ -34,9 +34,9 @@ class AST(nn.Module):
         super().__init__(*args, **kwargs)
         id2label, label2id = get_id_label_mapping(labels)
         config = ASTConfig(
-            hidden_size=300,
-            num_attention_heads=5,
-            num_hidden_layers=3,
+            hidden_size=256,
+            num_hidden_layers=6,
+            num_attention_heads=4,
             id2label=id2label,
             label2id=label2id,
             num_labels=len(label2id),
@@ -48,9 +48,13 @@ class AST(nn.Module):
         return self.model(x).logits
 
 
+# TODO: Remove waveform normalization from ASTFeatureExtractor.
+# Find correct mean and std dev
+# Find correct max length
 class ASTExtractorWrapper:
     def __init__(self, sampling_rate=16000, return_tensors="pt") -> None:
-        self.extractor = ASTFeatureExtractor()
+        max_length = 1024
+        self.extractor = ASTFeatureExtractor(do_normalize=False, max_length=max_length)
         self.sampling_rate = sampling_rate
         self.return_tensors = return_tensors
         self.waveform_pipeline = WaveformTrainingPipeline()  # TODO configure from yaml
@@ -62,7 +66,11 @@ class ASTExtractorWrapper:
         x = self.extractor(
             x, return_tensors=self.return_tensors, sampling_rate=self.sampling_rate
         )
-        return x["input_values"].squeeze(0).to(device)
+
+        x = x["input_values"].squeeze(0).to(device)
+        # normalize
+        x = (x - x.mean()) / x.std()
+        return x
 
 
 def train_lightning_ast(config: dict):
