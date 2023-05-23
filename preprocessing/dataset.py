@@ -26,6 +26,7 @@ class SongDataset(Dataset):
         audio_start_offset=6,  # seconds
         audio_window_duration=6,  # seconds
         audio_window_jitter=1.0,  # seconds
+        audio_durations=None,
     ):
         assert (
             audio_window_duration > audio_window_jitter
@@ -33,10 +34,15 @@ class SongDataset(Dataset):
 
         self.audio_paths = audio_paths
         self.dance_labels = dance_labels
-        audio_metadata = [ta.info(audio) for audio in audio_paths]
-        self.audio_durations = [
-            meta.num_frames / meta.sample_rate for meta in audio_metadata
-        ]
+
+        # Added to limit file I/O
+        if audio_durations is None:
+            audio_metadata = [ta.info(audio) for audio in audio_paths]
+            self.audio_durations = [
+                meta.num_frames / meta.sample_rate for meta in audio_metadata
+            ]
+        else:
+            self.audio_durations = audio_durations
         self.sample_rate = audio_metadata[0].sample_rate  # assuming same sample rate
         self.audio_window_duration = int(audio_window_duration)
         self.audio_start_offset = audio_start_offset
@@ -209,7 +215,12 @@ class Music4DanceDataset(Dataset):
             multi_label=multi_label,
             min_votes=min_votes,
         )
-        self.song_dataset = SongDataset(song_paths, labels, **kwargs)
+        self.song_dataset = SongDataset(
+            song_paths,
+            labels,
+            audio_durations=[30.0] * len(song_paths),
+            **kwargs,
+        )
 
     def __getitem__(self, index) -> tuple[torch.Tensor, torch.Tensor]:
         return self.song_dataset[index]
@@ -306,7 +317,7 @@ class DanceDataModule(pl.LightningDataModule):
             self.train_ds,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            shuffle=True,
+            shuffle=False,
         )
 
     def val_dataloader(self):
