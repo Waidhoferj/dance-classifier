@@ -41,9 +41,14 @@ class SongDataset(Dataset):
             self.audio_durations = [
                 meta.num_frames / meta.sample_rate for meta in audio_metadata
             ]
+            self.sample_rate = audio_metadata[
+                0
+            ].sample_rate  # assuming same sample rate
         else:
             self.audio_durations = audio_durations
-        self.sample_rate = audio_metadata[0].sample_rate  # assuming same sample rate
+            self.sample_rate = ta.info(
+                audio_paths[0]
+            ).sample_rate  # assuming same sample rate
         self.audio_window_duration = int(audio_window_duration)
         self.audio_start_offset = audio_start_offset
         self.audio_window_jitter = audio_window_jitter
