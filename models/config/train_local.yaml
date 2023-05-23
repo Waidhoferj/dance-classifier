@@ -18,8 +18,8 @@ dance_ids: &dance_ids
 
 data_module:
   batch_size: 64
-  num_workers: 10
-  data_subset: 0.1
+  num_workers: 7 # Reduced to avoid over opening files
+  # data_subset: 0.001
   test_proportion: 0.2
 
 datasets:
@@ -55,7 +55,7 @@ trainer:
   # overfit_batches: 1
 
 training_environment:
-  learning_rate: 0.00053
-  loggers:
-    models.training_environment.SpectrogramLogger:
-      frequency: 100
+  learning_rate: 0.000053
+  # loggers:
+  #   models.training_environment.SpectrogramLogger:
+  #     frequency: 100
