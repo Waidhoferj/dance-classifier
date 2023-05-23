@@ -27,14 +27,14 @@ class Wav2VecFeatureExtractor:
     def __call__(self, waveform) -> Any:
         waveform = self.waveform_pipeline(waveform)
         return self.feature_extractor(
-            waveform, sampling_rate=self.feature_extractor.sampling_rate
+            waveform.squeeze(0), sampling_rate=self.feature_extractor.sampling_rate
         )
 
     def __getattr__(self, attr):
         return getattr(self.feature_extractor, attr)
 
 
-def train_wav_model(config: dict):
+def train_huggingface(config: dict):
     TARGET_CLASSES = config["dance_ids"]
     DEVICE = config["device"]
     SEED = config["seed"]
@@ -43,12 +43,14 @@ def train_wav_model(config: dict):
     epochs = config["trainer"]["min_epochs"]
     test_proportion = config["data_module"].get("test_proportion", 0.2)
     pl.seed_everything(SEED, workers=True)
-    dataset = get_datasets(config["datasets"])
+    feature_extractor = Wav2VecFeatureExtractor()
+    dataset = get_datasets(config["datasets"], feature_extractor)
+    dataset = HuggingFaceDatasetWrapper(dataset)
     id2label, label2id = get_id_label_mapping(TARGET_CLASSES)
     test_proportion = config["data_module"]["test_proportion"]
     train_proporition = 1 - test_proportion
     train_ds, test_ds = random_split(dataset, [train_proporition, test_proportion])
-    feature_extractor = Wav2VecFeatureExtractor()
+
     model = AutoModelForAudioClassification.from_pretrained(
         MODEL_CHECKPOINT,
         num_labels=len(TARGET_CLASSES),
@@ -77,7 +79,6 @@ def train_wav_model(config: dict):
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=test_ds,
-        tokenizer=feature_extractor,
         compute_metrics=compute_hf_metrics,
     )
     trainer.train()
