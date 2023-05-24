@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 from typing import Any
 import torch
@@ -7,6 +8,7 @@ import numpy as np
 import pandas as pd
 import torchaudio as ta
 import pytorch_lightning as pl
+from glob import iglob
 
 from preprocessing.preprocess import (
     fix_dance_rating_counts,
@@ -170,7 +172,12 @@ class BestBallroomDataset(Dataset):
     ) -> None:
         super().__init__()
         song_paths, labels = self.get_examples(audio_dir, class_list)
-        self.song_dataset = SongDataset(song_paths, labels, **kwargs)
+        with open(os.path.join(audio_dir, "audio_durations.json"), "r") as f:
+            durations = json.load(f)
+        audio_durations = [durations[song] for song in song_paths]
+        self.song_dataset = SongDataset(
+            song_paths, labels, audio_durations=audio_durations, **kwargs
+        )
 
     def __getitem__(self, index) -> tuple[torch.Tensor, torch.Tensor]:
         return self.song_dataset[index]
@@ -388,3 +395,17 @@ def get_class_counts(config: dict):
     )
     labels = sorted(config["dance_ids"])
     return dict(zip(labels, counts))
+
+
+def record_audio_durations(folder: str):
+    """
+    Records a filename: duration mapping of all audio files in a folder to a json file.
+    """
+    durations = {}
+    music_files = iglob(os.path.join(folder, "**", "*.wav"), recursive=True)
+    for file in music_files:
+        meta = ta.info(file)
+        durations[file] = meta.num_frames / meta.sample_rate
+
+    with open(os.path.join(folder, "audio_durations.json"), "w") as f:
+        json.dump(durations, f)
