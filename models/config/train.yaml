@@ -23,11 +23,15 @@ data_module:
 
 datasets:
   preprocessing.dataset.Music4DanceDataset:
-    song_data_path: ../datastores/dance-music/songs_cleaned.csv
-    song_audio_path: ../datastores/dance-music
+    song_data_path: ../../s3_connections/music4dance/songs_cleaned.csv
+    song_audio_path: ../../s3_connections/music4dance
     class_list: *dance_ids
     multi_label: False
     min_votes: 1
+    audio_window_jitter: 0.7
+  preprocessing.dataset.BestBallroomDataset:
+    audio_dir: ../../s3_connections/ballroom-songs
+    class_list: *dance_ids
     audio_window_jitter: 0.7
 
 model:
@@ -46,7 +50,7 @@ trainer:
   min_epochs: 7
   fast_dev_run: False
   # gradient_clip_val: 0.5
-  # overfit_batches: 1
+  overfit_batches: 1
 
 training_environment:
   learning_rate: 0.00053

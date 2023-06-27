@@ -174,6 +174,7 @@ class BestBallroomDataset(Dataset):
         song_paths, labels = self.get_examples(audio_dir, class_list)
         with open(os.path.join(audio_dir, "audio_durations.json"), "r") as f:
             durations = json.load(f)
+            durations = {os.path.join(audio_dir, filepath): duration for filepath, duration in durations.items()}
         audio_durations = [durations[song] for song in song_paths]
         self.song_dataset = SongDataset(
             song_paths, labels, audio_durations=audio_durations, **kwargs
