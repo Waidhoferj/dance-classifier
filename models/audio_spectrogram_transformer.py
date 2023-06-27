@@ -88,13 +88,17 @@ def train_lightning_ast(config: dict):
         target_classes=TARGET_CLASSES,
         **config["data_module"],
     )
-
     model = AST(TARGET_CLASSES).to(DEVICE)
     label_weights = data.get_label_weights().to(DEVICE)
     criterion = nn.CrossEntropyLoss(
         label_weights
     )  # LabelWeightedBCELoss(label_weights)
-    train_env = TrainingEnvironment(model, criterion, config)
+    if "checkpoint" in config:
+        train_env = TrainingEnvironment.load_from_checkpoint(
+            config["checkpoint"], criterion=criterion, model=model, config=config
+        )
+    else:
+        train_env = TrainingEnvironment(model, criterion, config)
     callbacks = [
         # cb.LearningRateFinder(update_attr=True),
         cb.EarlyStopping("val/loss", patience=5),
