@@ -7,14 +7,13 @@ from transformers import AutoModelForAudioClassification, TrainingArguments, Tra
 
 from preprocessing.dataset import (
     HuggingFaceDatasetWrapper,
-    BestBallroomDataset,
     get_datasets,
 )
 from preprocessing.pipelines import WaveformTrainingPipeline
 
 from .utils import get_id_label_mapping, compute_hf_metrics
 
-MODEL_CHECKPOINT = "facebook/wav2vec2-base"
+MODEL_CHECKPOINT = "m3hrdadfi/wav2vec2-base-100k-voxpopuli-gtzan-music"
 
 
 class Wav2VecFeatureExtractor:

@@ -17,10 +17,12 @@ class TrainingEnvironment(pl.LightningModule):
         *args,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__()
         self.model = model
         self.criterion = criterion
-        self.learning_rate = learning_rate
+        self.learning_rate = config["training_environment"].get(
+            "learning_rate", learning_rate
+        )
         self.experiment_loggers = load_loggers(
             config["training_environment"].get("loggers", {})
         )
@@ -64,7 +66,7 @@ class TrainingEnvironment(pl.LightningModule):
             preds, y, prefix="val/", multi_label=self.has_multi_label_predictions
         )
         metrics["val/loss"] = self.criterion(preds, y)
-        self.log_dict(metrics, prog_bar=True)
+        self.log_dict(metrics, prog_bar=True, sync_dist=True)
 
     def test_step(self, batch: tuple[torch.Tensor, torch.TensorType], batch_index: int):
         x, y = batch
