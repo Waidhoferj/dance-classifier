@@ -7,21 +7,17 @@ import torch.nn as nn
 class WaveformTrainingPipeline(torch.nn.Module):
     def __init__(
         self,
-        input_freq=16000,
-        resample_freq=16000,
         expected_duration=6,
         snr_mean=6.0,
         noise_path=None,
     ):
         super().__init__()
-        self.input_freq = input_freq
         self.snr_mean = snr_mean
         self.noise = self.get_noise(noise_path)
-        self.resample_frequency = resample_freq
-        self.resample = taT.Resample(input_freq, resample_freq)
+        self.sample_rate = 16000
 
         self.preprocess_waveform = WaveformPreprocessing(
-            resample_freq * expected_duration
+            self.sample_rate * expected_duration
         )
 
     def get_noise(self, path) -> torch.Tensor:
@@ -30,8 +26,8 @@ class WaveformTrainingPipeline(torch.nn.Module):
         noise, sr = torchaudio.load(path)
         if noise.shape[0] > 1:
             noise = noise.mean(0, keepdim=True)
-        if sr != self.input_freq:
-            noise = taF.resample(noise, sr, self.input_freq)
+        if sr != self.sample_rate:
+            noise = taF.resample(noise, sr, self.sample_rate)
         return noise
 
     def add_noise(self, waveform: torch.Tensor) -> torch.Tensor:
@@ -49,7 +45,6 @@ class WaveformTrainingPipeline(torch.nn.Module):
         return noisy_waveform
 
     def forward(self, waveform: torch.Tensor) -> torch.Tensor:
-        waveform = self.resample(waveform)
         waveform = self.preprocess_waveform(waveform)
         if self.noise is not None:
             waveform = self.add_noise(waveform)
@@ -63,7 +58,7 @@ class SpectrogramTrainingPipeline(WaveformTrainingPipeline):
         super().__init__(*args, **kwargs)
         self.mask_count = mask_count
         self.audio_to_spectrogram = AudioToSpectrogram(
-            sample_rate=self.resample_frequency,
+            sample_rate=self.sample_rate,
         )
         self.freq_mask = taT.FrequencyMasking(freq_mask_size)
         self.time_mask = taT.TimeMasking(time_mask_size)

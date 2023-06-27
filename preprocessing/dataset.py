@@ -29,6 +29,7 @@ class SongDataset(Dataset):
         audio_window_duration=6,  # seconds
         audio_window_jitter=1.0,  # seconds
         audio_durations=None,
+        target_sample_rate=16000,
     ):
         assert (
             audio_window_duration > audio_window_jitter
@@ -54,6 +55,7 @@ class SongDataset(Dataset):
         self.audio_window_duration = int(audio_window_duration)
         self.audio_start_offset = audio_start_offset
         self.audio_window_jitter = audio_window_jitter
+        self.target_sample_rate = target_sample_rate
 
     def __len__(self):
         return int(
@@ -125,9 +127,9 @@ class SongDataset(Dataset):
         waveform, sample_rate = ta.load(
             audio_filepath, frame_offset=frame_offset, num_frames=num_frames
         )
-        assert (
-            sample_rate == self.sample_rate
-        ), f"Expected sample rate of {self.sample_rate}. Found {sample_rate}"
+        waveform = ta.functional.resample(
+            waveform, orig_freq=sample_rate, new_freq=self.target_sample_rate
+        )
         return waveform
 
     def _label_from_index(self, idx: int) -> torch.Tensor:
