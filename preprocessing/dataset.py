@@ -173,13 +173,19 @@ class BestBallroomDataset(Dataset):
         self, audio_dir="data/ballroom-songs", class_list=None, **kwargs
     ) -> None:
         super().__init__()
-        song_paths, labels = self.get_examples(audio_dir, class_list)
+        song_paths, encoded_labels, str_labels = self.get_examples(
+            audio_dir, class_list
+        )
+        self.labels = str_labels
         with open(os.path.join(audio_dir, "audio_durations.json"), "r") as f:
             durations = json.load(f)
-            durations = {os.path.join(audio_dir, filepath): duration for filepath, duration in durations.items()}
+            durations = {
+                os.path.join(audio_dir, filepath): duration
+                for filepath, duration in durations.items()
+            }
         audio_durations = [durations[song] for song in song_paths]
         self.song_dataset = SongDataset(
-            song_paths, labels, audio_durations=audio_durations, **kwargs
+            song_paths, encoded_labels, audio_durations=audio_durations, **kwargs
         )
 
     def __getitem__(self, index) -> tuple[torch.Tensor, torch.Tensor]:
@@ -208,7 +214,7 @@ class BestBallroomDataset(Dataset):
             song_paths.extend(os.path.join(folder_path, f) for f in folder_contents)
             labels.extend([dance_label] * len(folder_contents))
 
-        return np.array(song_paths), np.stack(labels)
+        return np.array(song_paths), np.stack(labels), dances
 
 
 class Music4DanceDataset(Dataset):
