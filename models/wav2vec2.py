@@ -3,7 +3,7 @@ from typing import Any
 import pytorch_lightning as pl
 from torch.utils.data import random_split
 from transformers import AutoFeatureExtractor
-from transformers import AutoModelForAudioClassification, TrainingArguments, Trainer
+from transformers import AutoModelForAudioClassification, TrainingArguments, Trainer, AutoProcessor
 
 from preprocessing.dataset import (
     HuggingFaceDatasetWrapper,
@@ -13,20 +13,18 @@ from preprocessing.pipelines import WaveformTrainingPipeline
 
 from .utils import get_id_label_mapping, compute_hf_metrics
 
-MODEL_CHECKPOINT = "m3hrdadfi/wav2vec2-base-100k-voxpopuli-gtzan-music"
+MODEL_CHECKPOINT = "yuval6967/wav2vec2-base-finetuned-gtzan"
 
 
 class Wav2VecFeatureExtractor:
     def __init__(self) -> None:
         self.waveform_pipeline = WaveformTrainingPipeline()
-        self.feature_extractor = AutoFeatureExtractor.from_pretrained(
-            MODEL_CHECKPOINT,
-        )
+        self.feature_extractor = AutoProcessor.from_pretrained("facebook/wav2vec2-base")
 
     def __call__(self, waveform) -> Any:
         waveform = self.waveform_pipeline(waveform)
         return self.feature_extractor(
-            waveform.squeeze(0), sampling_rate=self.feature_extractor.sampling_rate
+            waveform.squeeze(0), sampling_rate=16000
         )
 
     def __getattr__(self, attr):
@@ -64,6 +62,7 @@ def train_huggingface(config: dict):
         learning_rate=3e-5,
         per_device_train_batch_size=batch_size,
         gradient_accumulation_steps=5,
+        gradient_checkpointing=True,
         per_device_eval_batch_size=batch_size,
         num_train_epochs=epochs,
         warmup_ratio=0.1,
