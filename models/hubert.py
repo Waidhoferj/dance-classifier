@@ -7,7 +7,6 @@ from transformers import (
     AutoModelForAudioClassification,
     TrainingArguments,
     Trainer,
-    AutoProcessor,
 )
 
 from preprocessing.dataset import (
@@ -18,14 +17,13 @@ from preprocessing.pipelines import WaveformTrainingPipeline
 
 from .utils import get_id_label_mapping, compute_hf_metrics
 
-MODEL_CHECKPOINT = "yuval6967/wav2vec2-base-finetuned-gtzan"
-PROCESSOR_CHECKPOINT = "facebook/wav2vec2-base"
+MODEL_CHECKPOINT = "ntu-spml/distilhubert"
 
 
-class Wav2VecFeatureExtractor:
+class HubertFeatureExtractor:
     def __init__(self) -> None:
         self.waveform_pipeline = WaveformTrainingPipeline()
-        self.feature_extractor = AutoProcessor.from_pretrained(PROCESSOR_CHECKPOINT)
+        self.feature_extractor = AutoFeatureExtractor.from_pretrained(MODEL_CHECKPOINT)
 
     def __call__(self, waveform) -> Any:
         waveform = self.waveform_pipeline(waveform)
@@ -44,7 +42,7 @@ def train_huggingface(config: dict):
     epochs = config["trainer"]["min_epochs"]
     test_proportion = config["data_module"].get("test_proportion", 0.2)
     pl.seed_everything(SEED, workers=True)
-    feature_extractor = Wav2VecFeatureExtractor()
+    feature_extractor = HubertFeatureExtractor()
     dataset = get_datasets(config["datasets"], feature_extractor)
     dataset = HuggingFaceDatasetWrapper(dataset)
     id2label, label2id = get_id_label_mapping(TARGET_CLASSES)
@@ -57,15 +55,15 @@ def train_huggingface(config: dict):
         num_labels=len(TARGET_CLASSES),
         label2id=label2id,
         id2label=id2label,
-        ignore_mismatched_sizes=True,
+        # ignore_mismatched_sizes=True,
     ).to(DEVICE)
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
         evaluation_strategy="epoch",
         save_strategy="epoch",
-        learning_rate=3e-5,
+        learning_rate=5e-5,
         per_device_train_batch_size=batch_size,
-        gradient_accumulation_steps=5,
+        gradient_accumulation_steps=1,
         gradient_checkpointing=True,
         per_device_eval_batch_size=batch_size,
         num_train_epochs=epochs,
@@ -75,6 +73,7 @@ def train_huggingface(config: dict):
         metric_for_best_model="accuracy",
         push_to_hub=False,
         use_mps_device=DEVICE == "mps",
+        fp16=True,
     )
     trainer = Trainer(
         model=model,
