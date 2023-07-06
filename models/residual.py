@@ -25,7 +25,6 @@ class ResidualDancer(nn.Module):
         self.n_channels = n_channels
         self.n_classes = n_classes
 
-        # Spectrogram
         self.spec_bn = nn.BatchNorm2d(1)
 
         # CNN
@@ -111,6 +110,7 @@ def train_residual_dancer(config: dict):
     TARGET_CLASSES = config["dance_ids"]
     DEVICE = config["device"]
     SEED = config["seed"]
+    torch.set_float32_matmul_precision('medium')
     pl.seed_everything(SEED, workers=True)
     feature_extractor = SpectrogramTrainingPipeline(**config["feature_extractor"])
     dataset = get_datasets(config["datasets"], feature_extractor)

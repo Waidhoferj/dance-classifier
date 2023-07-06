@@ -73,7 +73,13 @@ class SongDataset(Dataset):
 
         waveform = self._waveform_from_index(idx)
         dance_labels = self._label_from_index(idx)
-        return waveform, dance_labels
+
+        if self._validate_output(waveform, dance_labels):
+            return waveform, dance_labels
+        else:
+            # WARNING: Could cause train/test split leak
+            return self[idx-1]
+
 
     def _idx2audio_idx(self, idx: int) -> int:
         return self._get_audio_loc_from_idx(idx)[0]

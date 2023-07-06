@@ -115,7 +115,4 @@ class AudioToSpectrogram:
     def __call__(self, waveform: torch.Tensor) -> torch.Tensor:
         spectrogram = self.spec(waveform)
         spectrogram = self.to_db(spectrogram)
-
-        # Normalize
-        spectrogram = (spectrogram - spectrogram.mean()) / (2 * spectrogram.std())
         return spectrogram

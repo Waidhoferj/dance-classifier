@@ -1,4 +1,4 @@
-training_fn: wav2vec2.train_huggingface
+training_fn: residual.train_residual_dancer
 device: cuda
 seed: 42
 dance_ids: &dance_ids
@@ -19,7 +19,7 @@ dance_ids: &dance_ids
 data_module:
   batch_size: 64
   num_workers: 5
-  test_proportion: 0.2
+  test_proportion: 0.15
 
 datasets:
   preprocessing.dataset.Music4DanceDataset:
