@@ -74,6 +74,21 @@ class SpectrogramTrainingPipeline(WaveformTrainingPipeline):
         return spec
 
 
+class SpectrogramProductionPipeline(torch.nn.Module):
+    def __init__(self, sample_rate=16000, expected_duration=6, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.preprocess_waveform = WaveformPreprocessing(
+            sample_rate * expected_duration
+        )
+        self.audio_to_spectrogram = AudioToSpectrogram(
+            sample_rate=sample_rate,
+        )
+
+    def forward(self, waveform: torch.Tensor) -> torch.Tensor:
+        waveform = self.preprocess_waveform(waveform)
+        return self.audio_to_spectrogram(waveform)
+
+
 class WaveformPreprocessing(torch.nn.Module):
     def __init__(self, expected_sample_length: int):
         super().__init__()

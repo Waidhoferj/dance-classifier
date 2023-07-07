@@ -1,0 +1,20 @@
+checkpoint: models/weights/ResidualDancer/weights.ckpt
+device: cpu
+seed: 42
+dance_ids: &dance_ids
+  - BCH
+  - CHA
+  - JIV
+  - ECS
+  - QST
+  - RMB
+  - SFT
+  - SLS
+  - SMB
+  - SWZ
+  - TGO
+  - VWZ
+  - WCS
+
+model:
+  n_channels: 128

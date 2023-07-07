@@ -2,18 +2,21 @@ from pathlib import Path
 import gradio as gr
 import numpy as np
 import os
+import pandas as pd
 from functools import cache
 from pathlib import Path
-from models.audio_spectrogram_transformer import AST, ASTExtractorWrapper
+from models.residual import ResidualDancer
 from models.training_environment import TrainingEnvironment
+from preprocessing.pipelines import SpectrogramProductionPipeline
 import torch
 from torch import nn
 import yaml
 import torchaudio
 
-CONFIG_FILE = Path("models/config/train_local.yaml")
-MODEL_CLS = AST
-EXTRACTOR = ASTExtractorWrapper
+CONFIG_FILE = Path("models/config/production.yaml")
+MODEL_CLS = ResidualDancer
+
+DANCE_MAPPING_FILE = Path("data/dance_mapping.csv")
 
 
 class DancePredictor:
@@ -22,7 +25,7 @@ class DancePredictor:
         weight_path: str,
         labels: list[str],
         expected_duration=6,
-        threshold=0.5,
+        threshold=0.1,
         resample_frequency=16000,
         device="cpu",
     ):
@@ -35,11 +38,13 @@ class DancePredictor:
         self.labels = np.array(labels)
         self.device = device
         self.model = self.get_model(weight_path)
-        self.extractor = ASTExtractorWrapper()
+        self.extractor = SpectrogramProductionPipeline()
 
     def get_model(self, weight_path: str) -> nn.Module:
         weights = torch.load(weight_path, map_location=self.device)["state_dict"]
-        model = AST(self.labels).to(self.device)
+        n_classes = len(self.labels)
+        # NOTE: Channels are not taken into account
+        model = ResidualDancer(n_classes=n_classes).to(self.device)
         for key in list(weights):
             weights[
                 key.replace(
@@ -56,10 +61,12 @@ class DancePredictor:
             config = yaml.safe_load(f)
         weight_path = config["checkpoint"]
         labels = sorted(config["dance_ids"])
-        expected_duration = 6
-        threshold = 0.5
-        resample_frequency = 16000
-        device = "mps"
+        dance_mapping = get_dance_mapping(DANCE_MAPPING_FILE)
+        labels = [dance_mapping[label] for label in labels]
+        expected_duration = config.get("expected_duration", 6)
+        threshold = config.get("threshold", 0.1)
+        resample_frequency = config.get("resample_frequency", 16000)
+        device = config.get("device", "cpu")
         return DancePredictor(
             weight_path,
             labels,
@@ -81,9 +88,6 @@ class DancePredictor:
         waveform = torchaudio.functional.resample(
             waveform, sample_rate, self.resample_frequency
         )
-        waveform = waveform[
-            :, : self.resample_frequency * self.expected_duration
-        ]  # TODO PAD
         features = self.extractor(waveform)
         features = features.unsqueeze(0).to(self.device)
         results = self.model(features)
@@ -103,7 +107,15 @@ def get_model(config_path: str) -> DancePredictor:
     return model
 
 
+@cache
+def get_dance_mapping(mapping_file: str) -> dict[str, str]:
+    mapping_df = pd.read_csv(mapping_file)
+    return {row["id"]: row["name"] for _, row in mapping_df.iterrows()}
+
+
 def predict(audio: tuple[int, np.ndarray]) -> list[str]:
+    if audio is None:
+        return "Dance Not Found"
     sample_rate, waveform = audio
 
     model = get_model(CONFIG_FILE)
@@ -116,7 +128,7 @@ def demo():
     description = "What should I dance to this song? Pass some audio to the Dance Classifier find out!"
     song_samples = Path(os.path.dirname(__file__), "assets", "song-samples")
     example_audio = [
-        str(song) for song in song_samples.iterdir() if song.name[0] != "."
+        str(song) for song in song_samples.iterdir() if not song.name.startswith(".")
     ]
     all_dances = get_model(CONFIG_FILE).labels
 

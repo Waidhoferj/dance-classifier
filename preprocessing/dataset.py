@@ -78,8 +78,8 @@ class SongDataset(Dataset):
             return waveform, dance_labels
         else:
             # WARNING: Could cause train/test split leak
-            return self[idx-1]
-
+            print("Invalid output, trying next index...")
+            return self[idx - 1]
 
     def _idx2audio_idx(self, idx: int) -> int:
         return self._get_audio_loc_from_idx(idx)[0]
@@ -424,3 +424,7 @@ def record_audio_durations(folder: str):
 
     with open(os.path.join(folder, "audio_durations.json"), "w") as f:
         json.dump(durations, f)
+
+
+class GTZAN:
+    pass

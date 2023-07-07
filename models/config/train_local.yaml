@@ -1,5 +1,5 @@
-training_fn: wav2vec2.train_huggingface
-checkpoint: lightning_logs/version_172/checkpoints/epoch=3-step=4572.ckpt
+training_fn: residual.train_residual_dancer
+checkpoint: lightning_logs/version_176/checkpoints/epoch=12-step=40404.ckpt
 device: mps
 seed: 42
 dance_ids: &dance_ids
@@ -24,10 +24,10 @@ data_module:
   test_proportion: 0.2
 
 datasets:
-  # preprocessing.dataset.BestBallroomDataset:
-  #   audio_dir: data/ballroom-songs
-  #   class_list: *dance_ids
-  #   audio_window_jitter: 0.7
+  preprocessing.dataset.BestBallroomDataset:
+    audio_dir: data/ballroom-songs
+    class_list: *dance_ids
+    audio_window_jitter: 0.7
 
   preprocessing.dataset.Music4DanceDataset:
     song_data_path: data/songs_cleaned.csv

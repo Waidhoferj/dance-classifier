@@ -110,7 +110,7 @@ def train_residual_dancer(config: dict):
     TARGET_CLASSES = config["dance_ids"]
     DEVICE = config["device"]
     SEED = config["seed"]
-    torch.set_float32_matmul_precision('medium')
+    torch.set_float32_matmul_precision("medium")
     pl.seed_everything(SEED, workers=True)
     feature_extractor = SpectrogramTrainingPipeline(**config["feature_extractor"])
     dataset = get_datasets(config["datasets"], feature_extractor)
@@ -123,7 +123,7 @@ def train_residual_dancer(config: dict):
     train_env = TrainingEnvironment(model, criterion, config)
     callbacks = [
         # cb.LearningRateFinder(update_attr=True),
-        cb.EarlyStopping("val/loss", patience=5),
+        cb.EarlyStopping("val/loss", patience=1),
         cb.StochasticWeightAveraging(1e-2),
         cb.RichProgressBar(),
         cb.DeviceStatsMonitor(),
