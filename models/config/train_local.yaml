@@ -18,10 +18,10 @@ dance_ids: &dance_ids
   - WCS
 
 data_module:
-  batch_size: 64
-  num_workers: 7 # Reduced to avoid over opening files
+  batch_size: 128
+  num_workers: 10
   # data_subset: 0.001
-  test_proportion: 0.2
+  test_proportion: 0.001
 
 datasets:
   preprocessing.dataset.BestBallroomDataset:
@@ -33,7 +33,7 @@ datasets:
     song_data_path: data/songs_cleaned.csv
     song_audio_path: data/samples # data/samples
     class_list: *dance_ids
-    multi_label: False
+    multi_label: True
     min_votes: 1
     audio_window_jitter: 0.7
 

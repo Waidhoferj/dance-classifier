@@ -9,6 +9,7 @@ import numpy as np
 import torchaudio
 import yaml
 from models.training_environment import TrainingEnvironment
+from models.utils import LabelWeightedBCELoss
 from preprocessing.dataset import DanceDataModule, get_datasets
 from preprocessing.pipelines import (
     SpectrogramTrainingPipeline,
@@ -118,7 +119,9 @@ def train_residual_dancer(config: dict):
     data = DanceDataModule(dataset, **config["data_module"])
     model = ResidualDancer(n_classes=len(TARGET_CLASSES), **config["model"])
     label_weights = data.get_label_weights().to(DEVICE)
-    criterion = nn.CrossEntropyLoss(label_weights)
+    criterion = LabelWeightedBCELoss(
+        label_weights
+    )  # nn.CrossEntropyLoss(label_weights)
 
     train_env = TrainingEnvironment(model, criterion, config)
     callbacks = [
@@ -126,8 +129,10 @@ def train_residual_dancer(config: dict):
         cb.EarlyStopping("val/loss", patience=1),
         cb.StochasticWeightAveraging(1e-2),
         cb.RichProgressBar(),
-        cb.DeviceStatsMonitor(),
     ]
     trainer = pl.Trainer(callbacks=callbacks, **config["trainer"])
     trainer.fit(train_env, datamodule=data)
-    trainer.test(train_env, datamodule=data)
+    trainer.test(
+        train_env,
+        datamodule=data,
+    )

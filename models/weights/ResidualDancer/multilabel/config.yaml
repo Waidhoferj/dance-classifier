@@ -1,4 +1,4 @@
-checkpoint: models/weights/ResidualDancer/weights.ckpt
+checkpoint: models/weights/ResidualDancer/multilabel/weights.ckpt
 device: cpu
 seed: 42
 dance_ids: &dance_ids
