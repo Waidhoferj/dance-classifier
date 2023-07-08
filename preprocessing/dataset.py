@@ -78,7 +78,6 @@ class SongDataset(Dataset):
             return waveform, dance_labels
         else:
             # WARNING: Could cause train/test split leak
-            print("Invalid output, trying next index...")
             return self[idx - 1]
 
     def _idx2audio_idx(self, idx: int) -> int:
@@ -112,8 +111,8 @@ class SongDataset(Dataset):
         is_finite = not torch.any(torch.isinf(x))
         is_numerical = not torch.any(torch.isnan(x))
         has_data = torch.any(x != 0.0)
-        is_binary = len(torch.unique(y)) < 3
-        return all((is_finite, is_numerical, has_data, is_binary))
+        is_probability = torch.all(y >= -0.0001) and torch.all(y <= 1.0001)
+        return all((is_finite, is_numerical, has_data, is_probability))
 
     def _waveform_from_index(self, idx: int) -> torch.Tensor:
         audio_index, frame_index = self._get_audio_loc_from_idx(idx)
@@ -365,8 +364,13 @@ class DanceDataModule(pl.LightningDataModule):
         dataset = (
             self.dataset.dataset if isinstance(self.dataset, Subset) else self.dataset
         )
-        weights = [ds.song_dataset.get_label_weights() for ds in dataset._data.datasets]
-        return torch.mean(torch.stack(weights), dim=0)  # TODO: Make this weighted
+        total_len = len(dataset)
+        ds_weights = [len(ds) / total_len for ds in dataset._data.datasets]
+        weights = sum(
+            ds.song_dataset.get_label_weights() * w
+            for ds, w in zip(dataset._data.datasets, ds_weights)
+        )
+        return weights
 
 
 def find_mean_std(dataset: Dataset, zscore=1.96, moe=0.02, p=0.5):
