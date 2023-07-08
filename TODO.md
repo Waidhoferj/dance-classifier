@@ -15,6 +15,6 @@
 - Try higher mels (224) and more ffts (2048)
 - Verify random sample of dataset outputs by hand.
 
-## Notes
-
-2xM60 insufficient memory for the AST.
+- Train with non music data and add a non music category
+- Add back class weights
+- Add back multi label classification
