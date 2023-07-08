@@ -1,12 +1,15 @@
 training_fn: residual.train_residual_dancer
-checkpoint: lightning_logs/version_176/checkpoints/epoch=12-step=40404.ckpt
 device: mps
 seed: 42
 dance_ids: &dance_ids
   - BCH
+  - BOL
   - CHA
-  - JIV
   - ECS
+  - HST
+  - LHP
+  - NC2
+  - JIV
   - QST
   - RMB
   - SFT
@@ -20,8 +23,7 @@ dance_ids: &dance_ids
 data_module:
   batch_size: 128
   num_workers: 10
-  # data_subset: 0.001
-  test_proportion: 0.001
+  test_proportion: 0.15
 
 datasets:
   preprocessing.dataset.BestBallroomDataset:
@@ -31,7 +33,7 @@ datasets:
 
   preprocessing.dataset.Music4DanceDataset:
     song_data_path: data/songs_cleaned.csv
-    song_audio_path: data/samples # data/samples
+    song_audio_path: data/samples
     class_list: *dance_ids
     multi_label: True
     min_votes: 1
@@ -56,7 +58,4 @@ trainer:
   # overfit_batches: 1
 
 training_environment:
-  learning_rate: 0.000053
-  # loggers:
-  #   models.training_environment.SpectrogramLogger:
-  #     frequency: 100
+  learning_rate: 0.00053

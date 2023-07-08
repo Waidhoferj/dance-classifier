@@ -95,23 +95,27 @@ class WaveformPreprocessing(torch.nn.Module):
         self.expected_sample_length = expected_sample_length
 
     def forward(self, waveform: torch.Tensor) -> torch.Tensor:
+        c_dim = 1 if len(waveform.shape) == 3 else 0
         # Take out extra channels
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(0, keepdim=True)
+        if waveform.shape[c_dim] > 1:
+            waveform = waveform.mean(c_dim, keepdim=True)
 
         # ensure it is the correct length
-        waveform = self._rectify_duration(waveform)
+        waveform = self._rectify_duration(waveform, c_dim)
         return waveform
 
-    def _rectify_duration(self, waveform: torch.Tensor):
+    def _rectify_duration(self, waveform: torch.Tensor, channel_dim: int):
         expected_samples = self.expected_sample_length
-        sample_count = waveform.shape[1]
+        sample_count = waveform.shape[channel_dim + 1]
         if expected_samples == sample_count:
             return waveform
         elif expected_samples > sample_count:
             pad_amount = expected_samples - sample_count
             return torch.nn.functional.pad(
-                waveform, (0, pad_amount), mode="constant", value=0.0
+                waveform,
+                (channel_dim + 1) * [0] + [pad_amount],
+                mode="constant",
+                value=0.0,
             )
         else:
             return waveform[:, :expected_samples]

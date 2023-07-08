@@ -424,11 +424,7 @@ def record_audio_durations(folder: str):
     music_files = iglob(os.path.join(folder, "**", "*.wav"), recursive=True)
     for file in music_files:
         meta = ta.info(file)
-        durations[file] = meta.num_frames / meta.sample_rate
+        durations[os.path.relpath(file, folder)] = meta.num_frames / meta.sample_rate
 
     with open(os.path.join(folder, "audio_durations.json"), "w") as f:
         json.dump(durations, f)
-
-
-class GTZAN:
-    pass

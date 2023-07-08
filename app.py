@@ -7,7 +7,7 @@ from functools import cache
 from pathlib import Path
 from models.residual import ResidualDancer
 from models.training_environment import TrainingEnvironment
-from preprocessing.pipelines import SpectrogramProductionPipeline
+from preprocessing.pipelines import SpectrogramProductionPipeline, WaveformPreprocessing
 import torch
 from torch import nn
 import yaml
@@ -16,6 +16,8 @@ import torchaudio
 CONFIG_FILE = Path("models/weights/ResidualDancer/multilabel/config.yaml")
 
 DANCE_MAPPING_FILE = Path("data/dance_mapping.csv")
+
+MIN_DURATION = 3.0
 
 
 class DancePredictor:
@@ -37,6 +39,9 @@ class DancePredictor:
         self.labels = np.array(labels)
         self.device = device
         self.model = self.get_model(weight_path)
+        self.process_waveform = WaveformPreprocessing(
+            resample_frequency * expected_duration
+        )
         self.extractor = SpectrogramProductionPipeline()
 
     def get_model(self, weight_path: str) -> nn.Module:
@@ -87,10 +92,21 @@ class DancePredictor:
         waveform = torchaudio.functional.resample(
             waveform, sample_rate, self.resample_frequency
         )
-        features = self.extractor(waveform)
-        features = features.unsqueeze(0).to(self.device)
+        window_size = self.resample_frequency * self.expected_duration
+        n_preds = int(waveform.shape[1] // (window_size / 2))
+        step_size = int(waveform.shape[1] / n_preds)
+
+        inputs = [
+            waveform[:, i * step_size : i * step_size + window_size]
+            for i in range(n_preds)
+        ]
+        features = [self.extractor(window) for window in inputs]
+        features = torch.stack(features).to(self.device)
         results = self.model(features)
-        results = nn.functional.softmax(results.squeeze(0), dim=0)
+        # Convert to probabilities
+        results = nn.functional.softmax(results, dim=1)
+        # Take average prediction over all of the windows
+        results = results.mean(dim=0)
         results = results.detach().cpu().numpy()
 
         result_mask = results > self.threshold
@@ -116,6 +132,9 @@ def predict(audio: tuple[int, np.ndarray]) -> list[str]:
     if audio is None:
         return "Dance Not Found"
     sample_rate, waveform = audio
+    duration = len(waveform) / sample_rate
+    if duration < MIN_DURATION:
+        return f"Please record at least {MIN_DURATION} seconds of audio"
 
     model = get_model(CONFIG_FILE)
     results = model(waveform, sample_rate)
@@ -133,7 +152,6 @@ def demo():
 
     recording_interface = gr.Interface(
         fn=predict,
-        description="Record at least **6 seconds** of the song.",
         inputs=gr.Audio(source="microphone", label="Song Recording"),
         outputs=gr.Label(label="Dances"),
         examples=example_audio,

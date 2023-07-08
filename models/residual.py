@@ -119,14 +119,11 @@ def train_residual_dancer(config: dict):
     data = DanceDataModule(dataset, **config["data_module"])
     model = ResidualDancer(n_classes=len(TARGET_CLASSES), **config["model"])
     label_weights = data.get_label_weights().to(DEVICE)
-    criterion = LabelWeightedBCELoss(
-        label_weights
-    )  # nn.CrossEntropyLoss(label_weights)
+    criterion = LabelWeightedBCELoss(label_weights)
 
     train_env = TrainingEnvironment(model, criterion, config)
     callbacks = [
-        # cb.LearningRateFinder(update_attr=True),
-        cb.EarlyStopping("val/loss", patience=1),
+        cb.EarlyStopping("val/loss", patience=2),
         cb.StochasticWeightAveraging(1e-2),
         cb.RichProgressBar(),
     ]
