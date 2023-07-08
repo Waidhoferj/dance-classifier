@@ -13,8 +13,7 @@ from torch import nn
 import yaml
 import torchaudio
 
-CONFIG_FILE = Path("models/config/production.yaml")
-MODEL_CLS = ResidualDancer
+CONFIG_FILE = Path("models/weights/ResidualDancer/multilabel/config.yaml")
 
 DANCE_MAPPING_FILE = Path("data/dance_mapping.csv")
 
