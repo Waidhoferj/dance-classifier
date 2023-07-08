@@ -2,6 +2,11 @@ import torch.nn as nn
 import torch
 import numpy as np
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+from functools import cache
+import pandas as pd
+import matplotlib.pyplot as plt
+import io
+from PIL import Image
 
 
 class LabelWeightedBCELoss(nn.Module):
@@ -38,10 +43,13 @@ def calculate_metrics(
 ) -> dict[str, torch.Tensor]:
     target = target.detach().cpu().numpy()
     pred = pred.detach().cpu()
-    pred = nn.functional.softmax(pred, dim=1)
+    if not multi_label:
+        pred = nn.functional.softmax(pred, dim=1)
     pred = pred.numpy()
     params = {
-        "y_true": target if multi_label else target.argmax(1),
+        "y_true": np.array(target > 0.0, dtype=float)
+        if multi_label
+        else target.argmax(1),
         "y_pred": np.array(pred > threshold, dtype=float)
         if multi_label
         else pred.argmax(1),
@@ -85,3 +93,22 @@ def get_id_label_mapping(labels: list[str]) -> tuple[dict, dict]:
 def compute_hf_metrics(eval_pred):
     predictions = np.argmax(eval_pred.predictions, axis=1)
     return accuracy_score(y_true=eval_pred.label_ids, y_pred=predictions)
+
+
+@cache
+def get_dance_mapping(mapping_file: str) -> dict[str, str]:
+    mapping_df = pd.read_csv(mapping_file)
+    return {row["id"]: row["name"] for _, row in mapping_df.iterrows()}
+
+
+def plot_to_image(figure) -> np.ndarray:
+    """Converts the matplotlib plot specified by 'figure' to a PNG image and
+    returns it. The supplied figure is closed and inaccessible after this call."""
+    # Save the plot to a PNG in memory.
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png")
+    # Closing the figure prevents it from being displayed directly inside
+    # the notebook.
+    plt.close(figure)
+    buf.seek(0)
+    return np.array(Image.open(buf))

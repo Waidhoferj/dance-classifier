@@ -1,10 +1,16 @@
 import importlib
-from models.utils import calculate_metrics
-
+from models.utils import calculate_metrics, plot_to_image, get_dance_mapping
+import numpy as np
 from abc import ABC, abstractmethod
 import pytorch_lightning as pl
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+from sklearn.metrics import (
+    roc_auc_score,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+)
 
 
 class TrainingEnvironment(pl.LightningModule):
@@ -27,8 +33,8 @@ class TrainingEnvironment(pl.LightningModule):
             config["training_environment"].get("loggers", {})
         )
         self.config = config
-        self.has_multi_label_predictions = (
-            not type(criterion).__name__ == "CrossEntropyLoss"
+        self.has_multi_label_predictions = not (
+            type(criterion).__name__ == "CrossEntropyLoss"
         )
         self.save_hyperparameters(
             {
@@ -44,6 +50,8 @@ class TrainingEnvironment(pl.LightningModule):
     ) -> torch.Tensor:
         features, labels = batch
         outputs = self.model(features)
+        if self.has_multi_label_predictions:
+            outputs = nn.functional.sigmoid(outputs)
         loss = self.criterion(outputs, labels)
         metrics = calculate_metrics(
             outputs,
@@ -62,6 +70,8 @@ class TrainingEnvironment(pl.LightningModule):
     ):
         x, y = batch
         preds = self.model(x)
+        if self.has_multi_label_predictions:
+            preds = nn.functional.sigmoid(preds)
         metrics = calculate_metrics(
             preds, y, prefix="val/", multi_label=self.has_multi_label_predictions
         )
@@ -71,12 +81,48 @@ class TrainingEnvironment(pl.LightningModule):
     def test_step(self, batch: tuple[torch.Tensor, torch.TensorType], batch_index: int):
         x, y = batch
         preds = self.model(x)
-        self.log_dict(
-            calculate_metrics(
-                preds, y, prefix="test/", multi_label=self.has_multi_label_predictions
-            ),
-            prog_bar=True,
+        if self.has_multi_label_predictions:
+            preds = nn.functional.sigmoid(preds)
+        metrics = calculate_metrics(
+            preds, y, prefix="test/", multi_label=self.has_multi_label_predictions
         )
+        if not self.has_multi_label_predictions:
+            preds = nn.functional.softmax(preds, dim=1)
+        y = y.detach().cpu().numpy()
+        preds = preds.detach().cpu().numpy()
+        # ROC-auc score
+        try:
+            metrics["test/roc_auc_score"] = torch.tensor(
+                roc_auc_score(y, preds), dtype=torch.float32
+            )
+        except ValueError:
+            # If there is only one class, roc_auc_score will throw an error
+            pass
+
+            pass
+        self.log_dict(metrics, prog_bar=True)
+        # Create confusion matrix
+
+        preds = preds.argmax(axis=1)
+        y = y.argmax(axis=1)
+        cm = confusion_matrix(
+            preds, y, normalize="all", labels=np.arange(len(self.config["dance_ids"]))
+        )
+        if hasattr(self, "test_cm"):
+            self.test_cm += cm
+        else:
+            self.test_cm = cm
+
+    def on_test_end(self):
+        dance_ids = sorted(self.config["dance_ids"])
+        np.fill_diagonal(self.test_cm, 0)
+        cm = self.test_cm / self.test_cm.max()
+        ConfusionMatrixDisplay(cm, display_labels=dance_ids).plot()
+        image = plot_to_image(plt.gcf())
+        image = torch.tensor(image, dtype=torch.uint8)
+        image = image.permute(2, 0, 1)
+        self.logger.experiment.add_image("test/confusion_matrix", image, 0)
+        delattr(self, "test_cm")
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
