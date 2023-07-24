@@ -1,4 +1,4 @@
-name: dancer-net
+name: dance-classifier
 channels:
   - pytorch
   - nvidia

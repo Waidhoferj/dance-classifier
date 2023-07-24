@@ -20,8 +20,7 @@ from preprocessing.dataset import (
     HuggingFaceDatasetWrapper,
     get_datasets,
 )
-from preprocessing.dataset import get_music4dance_examples
-from .utils import get_id_label_mapping, compute_hf_metrics
+from .utils import LabelWeightedBCELoss, get_id_label_mapping, compute_hf_metrics
 
 import pytorch_lightning as pl
 from pytorch_lightning import callbacks as cb
@@ -54,7 +53,7 @@ class AST(nn.Module):
 class ASTExtractorWrapper:
     def __init__(self, sampling_rate=16000, return_tensors="pt") -> None:
         max_length = 1024
-        self.extractor = ASTFeatureExtractor(do_normalize=False, max_length=max_length)
+        self.extractor = ASTFeatureExtractor(max_length=max_length, do_normalize=True)
         self.sampling_rate = sampling_rate
         self.return_tensors = return_tensors
         self.waveform_pipeline = WaveformTrainingPipeline()  # TODO configure from yaml
@@ -68,8 +67,6 @@ class ASTExtractorWrapper:
         )
 
         x = x["input_values"].squeeze(0).to(device)
-        # normalize
-        x = (x - x.mean()) / x.std()
         return x
 
 
@@ -90,9 +87,7 @@ def train_lightning_ast(config: dict):
     )
     model = AST(TARGET_CLASSES).to(DEVICE)
     label_weights = data.get_label_weights().to(DEVICE)
-    criterion = nn.CrossEntropyLoss(
-        label_weights
-    )  # LabelWeightedBCELoss(label_weights)
+    criterion = LabelWeightedBCELoss(label_weights)
     if "checkpoint" in config:
         train_env = TrainingEnvironment.load_from_checkpoint(
             config["checkpoint"], criterion=criterion, model=model, config=config
@@ -100,8 +95,7 @@ def train_lightning_ast(config: dict):
     else:
         train_env = TrainingEnvironment(model, criterion, config)
     callbacks = [
-        # cb.LearningRateFinder(update_attr=True),
-        cb.EarlyStopping("val/loss", patience=5),
+        cb.EarlyStopping("val/loss", patience=2),
         cb.RichProgressBar(),
     ]
     trainer = pl.Trainer(callbacks=callbacks, **config["trainer"])

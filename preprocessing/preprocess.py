@@ -10,9 +10,7 @@ import torchaudio
 import torch
 from tqdm import tqdm
 
-
-def url_to_filename(url: str) -> str:
-    return f"{url.split('/')[-1]}.wav"
+from preprocessing.utils import url_to_filename
 
 
 def has_valid_audio(audio_urls: pd.Series, audio_dir: str) -> pd.Series:

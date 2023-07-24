@@ -99,10 +99,21 @@ class SongDataset(Dataset):
             total_slices += audio_slices
 
     def get_label_weights(self):
-        n_examples, n_classes = self.dance_labels.shape
-        weights = n_examples / (n_classes * sum(self.dance_labels))
-        weights[np.isinf(weights)] = 0.0
-        return torch.from_numpy(weights)
+        n_examples = len(self)
+        n_classes = self.dance_labels.shape[1]
+        dance_label_counts = self.get_dance_label_counts()
+        weights = n_examples / (n_classes * dance_label_counts)
+        weights[np.isinf(weights) | np.isnan(weights)] = 1.0
+        return torch.from_numpy(weights).type(torch.float32)
+
+    def get_dance_label_counts(self) -> np.ndarray:
+        """
+        Returns the number of examples for each dance label.
+        """
+        examples_per_audio = np.expand_dims(
+            np.array(self.audio_durations) // self.audio_window_duration, axis=-1
+        )
+        return sum(self.dance_labels * examples_per_audio)
 
     def _backtrace_audio_path(self, index: int) -> str:
         return self.audio_paths[self._idx2audio_idx(index)]
@@ -230,6 +241,7 @@ class Music4DanceDataset(Dataset):
         class_list=None,
         multi_label=True,
         min_votes=1,
+        class_count_limit=None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -240,6 +252,7 @@ class Music4DanceDataset(Dataset):
             class_list=class_list,
             multi_label=multi_label,
             min_votes=min_votes,
+            class_count_limit=class_count_limit,
         )
         self.song_dataset = SongDataset(
             song_paths,
@@ -256,7 +269,12 @@ class Music4DanceDataset(Dataset):
 
 
 def get_music4dance_examples(
-    df: pd.DataFrame, audio_dir: str, class_list=None, multi_label=True, min_votes=1
+    df: pd.DataFrame,
+    audio_dir: str,
+    class_list=None,
+    multi_label=True,
+    min_votes=1,
+    class_count_limit=None,
 ) -> tuple[np.ndarray, np.ndarray]:
     sampled_songs = df[has_valid_audio(df["Sample"], audio_dir)].copy(deep=True)
     sampled_songs["DanceRating"] = fix_dance_rating_counts(sampled_songs["DanceRating"])

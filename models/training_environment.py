@@ -60,9 +60,6 @@ class TrainingEnvironment(pl.LightningModule):
             multi_label=self.has_multi_label_predictions,
         )
         self.log_dict(metrics, prog_bar=True)
-        experiment = self.logger.experiment
-        for logger in self.experiment_loggers:
-            logger.step(experiment, batch_index, features, labels)
         return loss
 
     def validation_step(
@@ -117,8 +114,10 @@ class TrainingEnvironment(pl.LightningModule):
         dance_ids = sorted(self.config["dance_ids"])
         np.fill_diagonal(self.test_cm, 0)
         cm = self.test_cm / self.test_cm.max()
-        ConfusionMatrixDisplay(cm, display_labels=dance_ids).plot()
-        image = plot_to_image(plt.gcf())
+        cm_plot = ConfusionMatrixDisplay(cm, display_labels=dance_ids)
+        fig, ax = plt.subplots(figsize=(12, 12))
+        cm_plot.plot(ax=ax)
+        image = plot_to_image(fig)
         image = torch.tensor(image, dtype=torch.uint8)
         image = image.permute(2, 0, 1)
         self.logger.experiment.add_image("test/confusion_matrix", image, 0)
