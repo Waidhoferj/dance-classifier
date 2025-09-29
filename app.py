@@ -85,9 +85,10 @@ class DancePredictor:
         if waveform.ndim == 1:
             waveform = np.stack([waveform, waveform]).T
         waveform = torch.from_numpy(waveform.T)
-        waveform = torchaudio.functional.apply_codec(
-            waveform, sample_rate, "wav", channels_first=True
-        )
+        # Convert to proper format instead of using deprecated apply_codec
+        # The apply_codec was mainly used for format conversion, but since we're already
+        # working with tensor data, we can skip this step
+        waveform = waveform.float()
 
         waveform = torchaudio.functional.resample(
             waveform, sample_rate, self.resample_frequency
