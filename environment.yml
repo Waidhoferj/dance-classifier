@@ -9,7 +9,9 @@ dependencies:
   - pytorch
   - torchaudio
   - librosa
-  - numpy
+  - numpy<2
+  - sounddevice
+  - gradio
   - pandas
   - bs4
   - requests

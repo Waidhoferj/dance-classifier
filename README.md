@@ -16,9 +16,11 @@ Classifies the dance style that best accompanies a provided song. Users record o
 
 ## Getting Started
 
-1. Download dependencies: `conda env create --file environment.yml`
-2. Open environment: `conda activate dancer-net`
-3. Start the demo application: `python app.py`
+1. Clone this repo: `git clone https://github.com/Waidhoferj/dance-classifier`
+2. Download git LSF files: `git lfs pull`
+3. Download dependencies: `conda env create --file environment.yml`
+4. Open environment: `conda activate dancer-classifier`
+5. Start the demo application: `python app.py`
 
 ## Training
 
